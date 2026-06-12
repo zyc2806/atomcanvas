@@ -14,6 +14,7 @@ A standalone web app that does one thing well: load atomic structures, render th
 - 3D rendering: atoms, covalent bonds (with bond order), hydrogen bonds, unit cell, PBC ghost atoms/bonds.
 - Bond detection with adjustable threshold (covalent radii × multiplier, default 1.2), reusing the existing `geometry.py` pipeline (NeighborList, ghost bonds, aromatic rings, bond-order inference via RDKit/Kekulé/heuristics).
 - Manual bond editing: add bond, delete bond, set bond order, between any two selected atoms. Overrides are listed and individually revertible. Undo/redo covers bond edits and style changes.
+- Full selection system carried over from ase-view (user-required): click/multi-click selection in the canvas, plus the selection expression language — label parsing (`C1`, `H2`…), expression queries with AST-based pinned-query rewriting, position filtering (cartesian/fractional criteria), axis-wise cluster analysis (layer selection), and ring detection. Backend `routers/selection.py` and frontend `selectionService.ts` + `SelectionInput.tsx` are copied wholesale. Selections feed bond editing and per-atom style overrides.
 - Per-element style customization: color, radius scale, opacity. Per-atom color override is also supported (the mechanism already exists in the copied store slices). Plus bond style (thickness, color mode), background, lighting, camera presets.
 - Style presets (`*.style.json`): named, structure-independent, applicable to any structure — the vehicle for uniform styling across many figures.
 - Scene documents (`*.scene.json`): full-fidelity save/restore of structures + bond overrides + style + camera.
@@ -40,7 +41,8 @@ atomcanvas/
 │       ├── models.py            # Pydantic schemas (trimmed)
 │       ├── routers/
 │       │   ├── structure.py     # upload/parse, ASE-format export
-│       │   └── bonds.py         # topology recompute (threshold, overrides), H-bonds
+│       │   ├── bonds.py         # topology recompute (threshold, overrides), H-bonds
+│       │   └── selection.py     # expression/label parsing, position filter, clusters, rings
 │       └── services/
 │           ├── geometry.py      # copied from ase-view (bond pipeline, PBC, ghosts)
 │           ├── bond_override_ops.py
@@ -62,7 +64,16 @@ atomcanvas/
 
 **Backend principles (carried over from ase-view):** async routers delegate to sync services via `run_in_threadpool`; no heavy ASE work on the event loop; errors surface as `HTTPException`, never raw tracebacks; routers never touch the atoms cache directly (go through `state.py`).
 
-**Migration strategy:** copy-then-trim. Every copied file is stripped of calculation/HPC/editing dead code at copy time. Existing backend tests for bonds/topology/overrides/export come along and must pass from the start.
+**Migration strategy:** copy-then-trim. Every copied file is stripped of calculation/HPC/editing dead code at copy time. Existing backend tests for bonds/topology/overrides/selection/export come along and must pass from the start.
+
+**Improve-while-copying (user-approved):** known weaknesses in the original code are fixed as files are copied, each fix covered by a test where practical:
+
+- Unbounded in-memory caches → bounded (LRU or size-capped), e.g. the backend atoms cache in `state.py`.
+- Heavy imports at module top level (RDKit, ASE submodules) → deferred to first use so server startup stays fast.
+- Bare/broad exception handling in copied services → narrowed to expected exception types with context preserved (`logger.exception`).
+- Temp-file write paths → guaranteed cleanup on every failure path (the `/export` endpoint pattern is already correct; apply it uniformly).
+- Blocking file I/O inside async routers → moved into `run_in_threadpool` consistently.
+- Frontend: dead store fields and prototype components are not carried over; copied slices get explicit types instead of `any` where the original was loose.
 
 ## 3. UI Design — canvas-first minimal
 

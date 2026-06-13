@@ -298,8 +298,56 @@ export interface SceneSlice {
     resetSceneSettings: () => void;
 }
 
+// Style-preset slice types (Task 7). Added here in Task 6 (decision D6) so that
+// createUISlice/createDataSlice's `activeTabId` reference typechecks against the
+// composite StructureState before the slices themselves are implemented.
+export interface ElementStyle { color?: string; radiusScale?: number; opacity?: number }
+
+export interface BondStyleSettings {
+    style: 'cylinder';
+    radius: number;
+    colorMode: 'element-split' | 'uniform';
+    uniformColor?: string;
+}
+
+export interface StylePresetState {
+    presetName: string;
+    elements: Record<string, ElementStyle>;
+    bondsStyle: BondStyleSettings;
+}
+
+export interface PresetSlice extends StylePresetState {
+    setElementStyle: (symbol: string, style: ElementStyle) => void;
+    clearElementStyle: (symbol: string) => void;
+    setBondsStyle: (s: Partial<BondStyleSettings>) => void;
+    setPresetName: (name: string) => void;
+    replacePreset: (p: StylePresetState) => void;
+}
+
+export interface StructureTab {
+    id: string;
+    name: string;
+    doc: StandardStructureObject;
+    bondOverrides: Record<string, string>;   // "i-j" -> "delete" | "1.0" | "2.0" | ...
+    colorOverrides: { [index: number]: string } | null;
+    opacityOverrides: { [index: number]: number } | null;
+    camera: CameraSnapshot | null;
+}
+
+export interface TabsSlice {
+    tabs: StructureTab[];
+    activeTabId: string | null;
+    topologyOverrides: Record<string, string>;  // overrides of the ACTIVE structure
+    addTab: (doc: StandardStructureObject, name: string) => string;
+    switchTab: (id: string) => void;
+    closeTab: (id: string) => void;
+    renameTab: (id: string, name: string) => void;
+    setTopologyOverride: (bondId: string, value: string | null) => void;
+    clearTopologyOverrides: () => void;
+}
+
 // Combined Store State.
-// NOTE: the tabs and style-preset slices (PresetSlice & TabsSlice) are added to
-// this union in Task 7, once those slices exist. Until then the composite store
-// is not built (see plan decision D5), so this alias only needs to typecheck.
-export type StructureState = DataSlice & UISlice & SceneSlice & StyleSlice & HistorySlice;
+// NOTE: the tabs and style-preset slices (PresetSlice & TabsSlice) are implemented
+// in Task 7. Their types are folded into the union here (decision D6) so the kept
+// slices typecheck. The composite store file itself is written in Task 7 (D5).
+export type StructureState = DataSlice & UISlice & SceneSlice & StyleSlice & HistorySlice & PresetSlice & TabsSlice;

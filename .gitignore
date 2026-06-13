@@ -5,4 +5,7 @@ node_modules/
 dist/
 playwright-report/
 test-results/
+.playwright/
+logs/
+*.log
 .DS_Store

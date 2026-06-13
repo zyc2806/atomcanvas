@@ -1,13 +1,33 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import ViewerCanvas from './components/r3f/ViewerCanvas';
+import { TopBar } from './components/shell/TopBar';
+import { PanelHost } from './components/shell/PanelHost';
+import type { ActivePanel } from './components/shell/PanelHost';
 import { useStructureStore } from './store/useStructureStore';
 import { structureService } from './services/structureService';
 import { useLoadAtomStyles } from './hooks/useLoadAtomStyles';
 
+const PANEL_KEYS: Record<string, Exclude<ActivePanel, null>> = {
+  s: 'style',
+  b: 'bonds',
+  c: 'scene',
+};
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    target.isContentEditable
+  );
+}
+
 export default function App() {
   useLoadAtomStyles();
-  const fileRef = useRef<HTMLInputElement>(null);
   const addTab = useStructureStore((s) => s.addTab);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   const onFiles = useCallback(async (files: FileList | null) => {
     if (!files) return;
@@ -17,23 +37,37 @@ export default function App() {
     }
   }, [addTab]);
 
+  const togglePanel = useCallback((panel: Exclude<ActivePanel, null>) => {
+    setActivePanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
+      if (e.key === 'Escape') {
+        setActivePanel(null);
+        return;
+      }
+      const panel = PANEL_KEYS[e.key.toLowerCase()];
+      if (panel) {
+        e.preventDefault();
+        togglePanel(panel);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [togglePanel]);
+
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <ViewerCanvas />
-      <input
-        ref={fileRef}
-        type="file"
-        multiple
-        hidden
-        data-testid="file-input"
-        onChange={(e) => onFiles(e.target.files)}
+      <TopBar
+        activePanel={activePanel}
+        onTogglePanel={togglePanel}
+        onOpenFiles={onFiles}
       />
-      <button
-        style={{ position: 'absolute', top: 8, left: 8 }}
-        onClick={() => fileRef.current?.click()}
-      >
-        Open
-      </button>
+      <PanelHost activePanel={activePanel} onClose={() => setActivePanel(null)} />
     </div>
   );
 }

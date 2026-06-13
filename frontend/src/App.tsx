@@ -2,8 +2,10 @@ import { useCallback, useRef } from 'react';
 import ViewerCanvas from './components/r3f/ViewerCanvas';
 import { useStructureStore } from './store/useStructureStore';
 import { structureService } from './services/structureService';
+import { useLoadAtomStyles } from './hooks/useLoadAtomStyles';
 
 export default function App() {
+  useLoadAtomStyles();
   const fileRef = useRef<HTMLInputElement>(null);
   const addTab = useStructureStore((s) => s.addTab);
 

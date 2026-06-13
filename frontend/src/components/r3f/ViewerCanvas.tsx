@@ -284,7 +284,7 @@ const RendererClearPolicy: React.FC = () => {
     return null;
 };
 
-const CameraController: React.FC<{ center: [number, number, number], shouldReset?: boolean }> = ({ center, shouldReset }) => {
+const CameraController: React.FC<{ center: [number, number, number], shouldReset?: boolean, fitRadius?: number }> = ({ center, shouldReset, fitRadius }) => {
     const { camera, gl, events, controls: sceneControls } = useThree();
     const controlsRef = useRef<ControlsLike | null>(null);
     const { 
@@ -299,6 +299,7 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
     } = useStructureStore();
     
     const centerRef = useRef(center);
+    const fitRadiusRef = useRef(fitRadius);
     const prevLoading = useRef(loading);
     const viewTargetRef = useRef(viewTarget);
     const lastCameraType = useRef(cameraType);
@@ -308,7 +309,8 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
 
     useEffect(() => {
         centerRef.current = center;
-    }, [center]);
+        fitRadiusRef.current = fitRadius;
+    }, [center, fitRadius]);
 
     useEffect(() => {
         viewTargetRef.current = viewTarget;
@@ -329,13 +331,21 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
 
         if ((justFinishedLoading && !userHasInteracted) || shouldResetInitial) {
             const c = centerRef.current;
-            camera.position.set(c[0], c[1], c[2] + 20);
+            // Frame the structure adaptively: distance to fit its bounding sphere
+            // in the camera's vertical FOV (with margin), so both a small molecule
+            // and a large slab are sized sensibly instead of a hardcoded distance.
+            const radius = Math.max(fitRadiusRef.current ?? 0, 0.8);
+            const persp = camera as THREE.PerspectiveCamera;
+            const fovDeg = persp.isPerspectiveCamera && persp.fov ? persp.fov : 50;
+            const halfFov = (fovDeg * Math.PI) / 180 / 2;
+            const dist = Math.max((radius * 1.6) / Math.sin(halfFov), 3);
+            camera.position.set(c[0], c[1], c[2] + dist);
             if (controls.target) {
                 controls.target.set(c[0], c[1], c[2]);
             }
             controls.update?.();
             setViewTarget([c[0], c[1], c[2]]);
-            setCameraState({ position: [c[0], c[1], c[2] + 20], up: [0, 1, 0], zoom: camera.zoom });
+            setCameraState({ position: [c[0], c[1], c[2] + dist], up: [0, 1, 0], zoom: camera.zoom });
         }
 
         prevLoading.current = loading;
@@ -526,10 +536,32 @@ const SceneContent: React.FC = () => {
 
 const ViewerCanvas: React.FC<ViewerCanvasProps> = ({ children, center = [0, 0, 0], shouldReset }) => {
     const { viewControls, visParams, opacityOverrides, bondOpacityOverrides } = useStructureStore();
+    const structureData = useStructureStore((state) => state.structureData);
     const { showShadows, showAxesGizmo } = viewControls;
     const { renderStyle } = visParams;
     const hasTransparentOverrides = hasAnyTransparentOverrides(opacityOverrides, bondOpacityOverrides);
     const shouldEnableStandardAO = renderStyle === 'standard' && !hasTransparentOverrides;
+
+    // Derive the structure's centroid and bounding radius so the camera can frame
+    // it adaptively. Falls back to the `center` prop / origin when no structure.
+    const { fitCenter, fitRadius } = useMemo(() => {
+        const positions = structureData?.structure.positions;
+        if (!positions || positions.length === 0) {
+            return { fitCenter: center, fitRadius: undefined as number | undefined };
+        }
+        let cx = 0, cy = 0, cz = 0;
+        for (const p of positions) { cx += p[0]; cy += p[1]; cz += p[2]; }
+        const n = positions.length;
+        cx /= n; cy /= n; cz /= n;
+        let r = 0;
+        for (const p of positions) {
+            r = Math.max(r, Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz));
+        }
+        return { fitCenter: [cx, cy, cz] as [number, number, number], fitRadius: r };
+    }, [structureData, center]);
+
+    const effectiveCenter = structureData ? fitCenter : center;
+    const effectiveReset = structureData ? true : shouldReset;
 
     return (
         <div style={{ width: '100%', height: '100%' }}>
@@ -538,7 +570,7 @@ const ViewerCanvas: React.FC<ViewerCanvasProps> = ({ children, center = [0, 0, 0
                 <CameraManager />
                 <Lighting />
                 <LightGizmos />
-                <CameraController center={center} shouldReset={shouldReset} />
+                <CameraController center={effectiveCenter} shouldReset={effectiveReset} fitRadius={fitRadius} />
                 <CameraAnimator />
                 <RenderInvalidator />
                 <RendererClearPolicy />

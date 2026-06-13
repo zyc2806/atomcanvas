@@ -17,7 +17,7 @@ describe('createHistorySlice', () => {
     const { result } = renderHook(() => useStructureStore());
     act(() => {
       // Initialize with some data
-      result.current.setStructureData(mockStructureData as any);
+      result.current.setStructureData(mockStructureData as never);
       // Clear history
       useStructureStore.setState({ past: [], future: [] });
     });

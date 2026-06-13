@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useStructureStore } from '../useStructureStore';
 
-const fakeDoc = (_n: string) => ({ structure: { symbols: ['O','H','H'], positions: [[0,0,0],[0.96,0,0],[-0.24,0.93,0]] } }) as never;
+const fakeDoc = (name: string) => ({ name, structure: { symbols: ['O','H','H'], positions: [[0,0,0],[0.96,0,0],[-0.24,0.93,0]] } }) as never;
 
 describe('tabs slice', () => {
   beforeEach(() => useStructureStore.setState({ tabs: [], activeTabId: null, topologyOverrides: {} }));

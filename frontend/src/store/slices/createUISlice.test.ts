@@ -149,7 +149,7 @@ describe('createUISlice', () => {
       };
 
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.toggleSelection(0);
       });
       
@@ -177,7 +177,7 @@ describe('createUISlice', () => {
         };
     
         await act(async () => {
-            result.current.setStructureData(mockStructureData as any);
+            result.current.setStructureData(mockStructureData as never);
             result.current.updateSelection([0, 1], 'replace');
             useStructureStore.setState({ selectedBonds: ['0-1'] });
         });
@@ -210,7 +210,7 @@ describe('createUISlice', () => {
       };
 
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.toggleSelection(0);
         result.current.toggleSelection(1);
         result.current.toggleSelection(2);
@@ -236,7 +236,7 @@ describe('createUISlice', () => {
       };
 
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
       });
 
       await act(async () => {
@@ -362,7 +362,7 @@ describe('createUISlice', () => {
       };
 
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.updateSelection([0, 1, 2], 'replace');
       });
 
@@ -385,7 +385,7 @@ describe('createUISlice', () => {
         };
     
         await act(async () => {
-            result.current.setStructureData(mockStructureData as any);
+            result.current.setStructureData(mockStructureData as never);
             result.current.updateSelection([0, 1], 'replace');
         });
     
@@ -458,7 +458,7 @@ describe('createUISlice', () => {
         const mockData = { ...mockStructureData, visualization: { bonds: [], h_bonds: [], rings: [] } };
         
         await act(async () => {
-          result.current.setStructureData(mockData as any);
+          result.current.setStructureData(mockData as never);
           result.current.setSelectionExpression('label:C1');
           useStructureStore.setState({ selectedAtoms: [0] });
         });
@@ -474,7 +474,7 @@ describe('createUISlice', () => {
       const { result } = renderHook(() => useStructureStore());
       
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.setSelectionExpression('x > 5');
         useStructureStore.setState({ selectedAtoms: [0] }); 
       });
@@ -491,7 +491,7 @@ describe('createUISlice', () => {
       const { result } = renderHook(() => useStructureStore());
       
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.setSelectionExpression('x > 5');
         useStructureStore.setState({ selectedAtoms: [0, 1] }); 
       });
@@ -508,7 +508,7 @@ describe('createUISlice', () => {
       const { result } = renderHook(() => useStructureStore());
       
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.setSelectionExpression('(x > 5) and not label:O1');
         useStructureStore.setState({ selectedAtoms: [0] }); 
       });
@@ -525,7 +525,7 @@ describe('createUISlice', () => {
       const { result } = renderHook(() => useStructureStore());
       
       await act(async () => {
-        result.current.setStructureData(mockStructureData as any);
+        result.current.setStructureData(mockStructureData as never);
         result.current.setSelectionExpression('(x > 5) or label:O1');
         useStructureStore.setState({ selectedAtoms: [0, 1] }); 
       });

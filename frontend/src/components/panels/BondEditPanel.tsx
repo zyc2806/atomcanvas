@@ -165,7 +165,7 @@ export function BondEditPanel() {
               >
                 <ListItemText
                   primary={`${i}–${j} → ${value}`}
-                  primaryTypographyProps={{ variant: 'body2' }}
+                  slotProps={{ primary: { variant: 'body2' } }}
                 />
               </ListItem>
             );

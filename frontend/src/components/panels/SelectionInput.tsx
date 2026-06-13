@@ -148,41 +148,43 @@ export const SelectionInput: React.FC = () => {
                             helperText={error}
                             onKeyDown={handleKeyDown}
                             size="small"
-                            InputProps={{
-                                ...params.InputProps,
-                                endAdornment: (
-                                    <>
-                                        {params.InputProps.endAdornment}
-                                        <InputAdornment position="end">
-                                            <Tooltip title="Invert Selection">
-                                                <span>
-                                                    <IconButton
-                                                        aria-label="Invert Selection"
-                                                        onClick={handleInvert}
-                                                        edge="end"
-                                                        size="small"
-                                                        sx={{ mr: 1 }}
-                                                    >
-                                                        <SwapHorizIcon />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title="Apply Selection">
-                                                <span>
-                                                    <IconButton
-                                                        aria-label="Apply Selection"
-                                                        onClick={handleApply}
-                                                        edge="end"
-                                                        disabled={loading}
-                                                        size="small"
-                                                    >
-                                                        {loading ? <CircularProgress size={20} /> : <CheckIcon />}
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                        </InputAdornment>
-                                    </>
-                                ),
+                            slotProps={{
+                                input: {
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                        <>
+                                            {params.InputProps.endAdornment}
+                                            <InputAdornment position="end">
+                                                <Tooltip title="Invert Selection">
+                                                    <span>
+                                                        <IconButton
+                                                            aria-label="Invert Selection"
+                                                            onClick={handleInvert}
+                                                            edge="end"
+                                                            size="small"
+                                                            sx={{ mr: 1 }}
+                                                        >
+                                                            <SwapHorizIcon />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                <Tooltip title="Apply Selection">
+                                                    <span>
+                                                        <IconButton
+                                                            aria-label="Apply Selection"
+                                                            onClick={handleApply}
+                                                            edge="end"
+                                                            disabled={loading}
+                                                            size="small"
+                                                        >
+                                                            {loading ? <CircularProgress size={20} /> : <CheckIcon />}
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                            </InputAdornment>
+                                        </>
+                                    ),
+                                },
                             }}
                         />
                     )}

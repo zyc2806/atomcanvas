@@ -1,0 +1,34 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useStructureStore } from '../useStructureStore';
+
+const fakeDoc = (_n: string) => ({ structure: { symbols: ['O','H','H'], positions: [[0,0,0],[0.96,0,0],[-0.24,0.93,0]] } }) as never;
+
+describe('tabs slice', () => {
+  beforeEach(() => useStructureStore.setState({ tabs: [], activeTabId: null, topologyOverrides: {} }));
+
+  it('addTab stores doc, activates it, and pushes structureData', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const s = useStructureStore.getState();
+    expect(s.tabs).toHaveLength(1);
+    expect(s.activeTabId).toBe(id);
+    expect(s.structureData).toBe(s.tabs[0].doc);
+  });
+
+  it('switchTab snapshots overrides into the old tab and restores the new one', () => {
+    const st = useStructureStore.getState();
+    const a = st.addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().setTopologyOverride('0-1', 'delete');
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().topologyOverrides).toEqual({});
+    const tabB = useStructureStore.getState().tabs.find(t => t.id === b)!;
+    expect(tabB.bondOverrides).toEqual({ '0-1': 'delete' });
+  });
+
+  it('closeTab of active tab activates a neighbor', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().closeTab(useStructureStore.getState().activeTabId!);
+    expect(useStructureStore.getState().activeTabId).toBe(a);
+  });
+});

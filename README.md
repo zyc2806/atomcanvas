@@ -59,7 +59,7 @@ From the **Export** menu in the top bar:
 
 | Export | What you get |
 | --- | --- |
-| **PNG (current)** | High-resolution figure of the current view, with DPI metadata and an optional element legend. |
+| **PNG (current)** | A PNG snapshot of the current view, captured directly from the WebGL canvas. |
 | **glb (current)** | A `.glb` 3D model built from the current structure + styling. |
 | **style.json** | The element/atom styling preset (portable, re-importable). |
 | **scene.json** | The full scene: styling + camera + scene toggles. |

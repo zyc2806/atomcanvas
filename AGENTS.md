@@ -102,8 +102,8 @@ frontend/
       selectionService.ts   #   selection-DSL parse
       sceneDocument.ts      #   scene.json / style.json (de)serialization + schemaVersion gate
       glbExporter.ts        #   build a .glb from structure + style (PowerPoint-compatible)
-      imageExport*.ts        #  PNG export pipeline (DPI metadata, legend composite)
-      batchExport.ts        #   all-tabs -> PNG / glb
+      download.ts           #   blob download + collision-safe filenames
+      batchExport.ts        #   PNG (canvas.toDataURL) / glb / json, single + all-tabs
     types/, hooks/, utils/
   e2e/                      # playwright spec (upload -> edit bond -> export)
 

@@ -145,14 +145,11 @@ async def upload_structure(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as exc:
-        error_type = type(exc).__name__
-        error_message = str(exc)
         logger.exception("Upload failed for %s", upload_name)
-        detail_message = (
-            "An unexpected server error occurred during upload. "
-            f"Type: {error_type}. Message: {error_message}"
-        )
-        raise HTTPException(status_code=500, detail=detail_message) from exc
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected server error occurred during upload.",
+        ) from exc
     finally:
         await file.close()
 
@@ -205,12 +202,11 @@ async def update_visualization(request: UpdateStructureRequest):
         return Visualization(**visualization_payload)
 
     except Exception as e:
-        import traceback
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.error(f"Update visualization failed: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Update visualization failed")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected server error occurred while updating the visualization.",
+        ) from e
 
 
 def _serialize_export_warning(warning) -> ExportWarning:
@@ -338,10 +334,11 @@ async def export_structure(request: ExportRequest):
             },
         )
     except Exception as exc:
+        logger.exception("Structure export failed")
         raise HTTPException(
             status_code=500,
             detail={
                 "code": "EXPORT_FAILED",
-                "message": str(exc),
+                "message": "An unexpected server error occurred during export.",
             },
-        )
+        ) from exc

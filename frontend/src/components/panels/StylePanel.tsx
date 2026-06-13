@@ -1,9 +1,324 @@
-import { Box, Typography } from '@mui/material';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Box,
+  Button,
+  Checkbox,
+  Divider,
+  FormControlLabel,
+  IconButton,
+  Popover,
+  Slider,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { HexColorPicker } from 'react-colorful';
+import { useStructureStore } from '../../store/useStructureStore';
+import { elementStylesToAtomOverrides } from '../../services/elementStyleApply';
+import type { ElementStyle } from '../../types/store';
+
+const DEFAULT_ATOM_COLOR = '#cccccc';
+
+/**
+ * Small color-swatch button that opens a react-colorful picker in a Popover.
+ */
+function ColorSwatch({
+  color,
+  onChange,
+  size = 24,
+}: {
+  color: string;
+  onChange: (color: string) => void;
+  size?: number;
+}) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <Box
+        component="button"
+        type="button"
+        aria-label="pick color"
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        sx={{
+          width: size,
+          height: size,
+          borderRadius: 1,
+          border: '1px solid rgba(255,255,255,0.3)',
+          backgroundColor: color,
+          cursor: 'pointer',
+          p: 0,
+        }}
+      />
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Box sx={{ p: 1.5 }}>
+          <HexColorPicker color={color} onChange={onChange} />
+        </Box>
+      </Popover>
+    </>
+  );
+}
 
 export function StylePanel() {
+  const structureData = useStructureStore((s) => s.structureData);
+  const elements = useStructureStore((s) => s.elements);
+  const setElementStyle = useStructureStore((s) => s.setElementStyle);
+  const clearElementStyle = useStructureStore((s) => s.clearElementStyle);
+
+  const bondsStyle = useStructureStore((s) => s.bondsStyle);
+  const setBondsStyle = useStructureStore((s) => s.setBondsStyle);
+
+  const sceneSettings = useStructureStore((s) => s.sceneSettings);
+  const setBackground = useStructureStore((s) => s.setBackground);
+  const setGlobalBrightness = useStructureStore((s) => s.setGlobalBrightness);
+
+  const viewControls = useStructureStore((s) => s.viewControls);
+  const setViewControls = useStructureStore((s) => s.setViewControls);
+
+  const selectedAtoms = useStructureStore((s) => s.selectedAtoms);
+  const colorOverrides = useStructureStore((s) => s.colorOverrides);
+  const setColorOverrides = useStructureStore((s) => s.setColorOverrides);
+  const setOpacityOverrides = useStructureStore((s) => s.setOpacityOverrides);
+
+  const symbols = useMemo<string[]>(
+    () => structureData?.structure.symbols ?? [],
+    [structureData],
+  );
+
+  const distinctElements = useMemo(
+    () => Array.from(new Set(symbols)),
+    [symbols],
+  );
+
+  // Per-atom overrides (e.g. from the canvas selection) that the element-level
+  // styling must NOT clobber. We keep them in refs so a recompute triggered by an
+  // element-style change re-merges them on top (per-atom override wins).
+  const perAtomColorRef = useRef<{ [i: number]: string } | null>(null);
+  const perAtomOpacityRef = useRef<{ [i: number]: number } | null>(null);
+
+  useEffect(() => {
+    if (symbols.length === 0) {
+      return;
+    }
+    const { colorOverrides: elColors, opacityOverrides: elOpacities } =
+      elementStylesToAtomOverrides(symbols, elements);
+
+    const mergedColors = { ...elColors, ...(perAtomColorRef.current ?? {}) };
+    const mergedOpacities = {
+      ...elOpacities,
+      ...(perAtomOpacityRef.current ?? {}),
+    };
+
+    setColorOverrides(Object.keys(mergedColors).length > 0 ? mergedColors : null);
+    setOpacityOverrides(
+      Object.keys(mergedOpacities).length > 0 ? mergedOpacities : null,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements, symbols]);
+
+  const handleSelectedColor = (color: string) => {
+    const fromSelection: { [i: number]: string } = {};
+    selectedAtoms.forEach((idx) => {
+      fromSelection[idx] = color;
+    });
+    perAtomColorRef.current = {
+      ...(perAtomColorRef.current ?? {}),
+      ...fromSelection,
+    };
+    const existing = colorOverrides ?? {};
+    setColorOverrides({ ...existing, ...fromSelection });
+  };
+
+  const elementColor = (sym: string): string =>
+    elements[sym]?.color ?? DEFAULT_ATOM_COLOR;
+
+  const update = (sym: string, patch: ElementStyle) =>
+    setElementStyle(sym, patch);
+
   return (
-    <Box sx={{ p: 2, width: 320 }}>
-      <Typography variant="subtitle1">Style</Typography>
+    <Box sx={{ p: 2, width: 340 }}>
+      <Typography variant="subtitle1" gutterBottom>
+        Style
+      </Typography>
+
+      <Table size="small" aria-label="element styles">
+        <TableHead>
+          <TableRow>
+            <TableCell>Element</TableCell>
+            <TableCell>Color</TableCell>
+            <TableCell>Radius</TableCell>
+            <TableCell>Opacity</TableCell>
+            <TableCell />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {distinctElements.map((sym) => {
+            const st = elements[sym] ?? {};
+            return (
+              <TableRow key={sym}>
+                <TableCell>{sym}</TableCell>
+                <TableCell>
+                  <ColorSwatch
+                    color={elementColor(sym)}
+                    onChange={(color) => update(sym, { color })}
+                  />
+                </TableCell>
+                <TableCell sx={{ minWidth: 90 }}>
+                  <Slider
+                    size="small"
+                    min={0.3}
+                    max={2.0}
+                    step={0.05}
+                    value={st.radiusScale ?? 1.0}
+                    onChange={(_, v) => update(sym, { radiusScale: v as number })}
+                    aria-label={`radius-${sym}`}
+                    slotProps={{
+                      input: { 'data-testid': `radius-${sym}` } as never,
+                    }}
+                  />
+                </TableCell>
+                <TableCell sx={{ minWidth: 90 }}>
+                  <Slider
+                    size="small"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={st.opacity ?? 1.0}
+                    onChange={(_, v) => update(sym, { opacity: v as number })}
+                    aria-label={`opacity-${sym}`}
+                    slotProps={{
+                      input: { 'data-testid': `opacity-${sym}` } as never,
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <IconButton
+                    size="small"
+                    aria-label={`reset-${sym}`}
+                    onClick={() => clearElementStyle(sym)}
+                  >
+                    <RestartAltIcon fontSize="small" />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+
+      {selectedAtoms.length > 0 && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="subtitle2" gutterBottom>
+            Selected atoms ({selectedAtoms.length})
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="body2" color="text.secondary">
+              Color
+            </Typography>
+            <ColorSwatch
+              color={DEFAULT_ATOM_COLOR}
+              onChange={handleSelectedColor}
+            />
+          </Stack>
+        </>
+      )}
+
+      <Divider sx={{ my: 2 }} />
+      <Typography variant="subtitle2" gutterBottom>
+        Bonds
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        Radius ({bondsStyle.radius.toFixed(2)})
+      </Typography>
+      <Slider
+        size="small"
+        min={0.02}
+        max={0.4}
+        step={0.01}
+        value={bondsStyle.radius}
+        onChange={(_, v) => setBondsStyle({ radius: v as number })}
+        aria-label="bond-radius"
+        slotProps={{ input: { 'data-testid': 'bond-radius' } as never }}
+      />
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={bondsStyle.colorMode}
+        onChange={(_, mode) => {
+          if (mode) setBondsStyle({ colorMode: mode });
+        }}
+        sx={{ mt: 1 }}
+      >
+        <ToggleButton value="element-split">Split</ToggleButton>
+        <ToggleButton value="uniform">Uniform</ToggleButton>
+      </ToggleButtonGroup>
+
+      <Divider sx={{ my: 2 }} />
+      <Typography variant="subtitle2" gutterBottom>
+        Scene
+      </Typography>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          Background
+        </Typography>
+        <ColorSwatch
+          color={sceneSettings.background.solidColor}
+          onChange={(color) => setBackground({ solidColor: color })}
+        />
+      </Stack>
+      <FormControlLabel
+        control={
+          <Checkbox
+            size="small"
+            checked={Boolean(viewControls.forceTransparentBackground)}
+            onChange={(e) =>
+              setViewControls({ forceTransparentBackground: e.target.checked })
+            }
+          />
+        }
+        label="Transparent background"
+      />
+      <Typography variant="caption" color="text.secondary">
+        Brightness ({sceneSettings.globalBrightness.toFixed(2)})
+      </Typography>
+      <Slider
+        size="small"
+        min={0}
+        max={2}
+        step={0.05}
+        value={sceneSettings.globalBrightness}
+        onChange={(_, v) => setGlobalBrightness(v as number)}
+        aria-label="brightness"
+        slotProps={{ input: { 'data-testid': 'brightness' } as never }}
+      />
+
+      <Box sx={{ mt: 2 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            distinctElements.forEach((sym) => clearElementStyle(sym));
+            perAtomColorRef.current = null;
+            perAtomOpacityRef.current = null;
+            setColorOverrides(null);
+            setOpacityOverrides(null);
+          }}
+        >
+          Reset all styles
+        </Button>
+      </Box>
     </Box>
   );
 }

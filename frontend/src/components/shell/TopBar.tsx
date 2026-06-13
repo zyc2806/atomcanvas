@@ -3,8 +3,8 @@ import { AppBar, Toolbar, Button, IconButton, Box, Tooltip } from '@mui/material
 import PaletteIcon from '@mui/icons-material/Palette';
 import LinkIcon from '@mui/icons-material/Link';
 import TuneIcon from '@mui/icons-material/Tune';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { StructureTabs } from './StructureTabs';
+import { ExportMenu } from './ExportMenu';
 import type { ActivePanel } from './PanelHost';
 
 interface TopBarProps {
@@ -70,14 +70,7 @@ export function TopBar({ activePanel, onTogglePanel, onOpenFiles }: TopBarProps)
           </IconButton>
         </Tooltip>
 
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<FileDownloadIcon />}
-          disabled
-        >
-          Export
-        </Button>
+        <ExportMenu />
       </Toolbar>
     </AppBar>
   );

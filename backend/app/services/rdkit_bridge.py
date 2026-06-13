@@ -5,14 +5,23 @@ from ase import Atoms
 
 logger = logging.getLogger(__name__)
 
-try:
-    from rdkit import Chem
-    from rdkit.Chem import rdDetermineBonds
-    HAS_RDKIT = True
-except ImportError:
-    HAS_RDKIT = False
-    Chem = None
-    rdDetermineBonds = None
+_RDKIT = None  # (Chem, rdDetermineBonds) once loaded; False if unavailable
+
+
+def _load_rdkit():
+    global _RDKIT
+    if _RDKIT is None:
+        try:
+            from rdkit import Chem
+            from rdkit.Chem import rdDetermineBonds
+            _RDKIT = (Chem, rdDetermineBonds)
+        except ImportError:
+            _RDKIT = False
+    return _RDKIT
+
+
+def has_rdkit() -> bool:
+    return bool(_load_rdkit())
 
 def atoms_to_rdkit_mol(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indices: Optional[List[int]] = None) -> Tuple[Any, Dict[int, int]]:
     """
@@ -20,8 +29,10 @@ def atoms_to_rdkit_mol(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indic
     If cluster_indices is provided, only include those atoms.
     Returns (mol, map_old_to_new_indices)
     """
-    if not HAS_RDKIT:
+    loaded = _load_rdkit()
+    if not loaded:
         raise ImportError("RDKit is not installed.")
+    Chem, rdDetermineBonds = loaded
 
     mol = Chem.RWMol()
     old_to_new = {}
@@ -58,9 +69,11 @@ def detect_bonds_rdkit(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indic
     """
     Infer bond orders and aromatic rings using RDKit.
     """
-    if not HAS_RDKIT:
+    loaded = _load_rdkit()
+    if not loaded:
         logger.warning("RDKit is not installed. Bond detection using RDKit skipped.")
         return [], []
+    Chem, rdDetermineBonds = loaded
 
     try:
         mol, old_to_new = atoms_to_rdkit_mol(atoms, bonds, cluster_indices)

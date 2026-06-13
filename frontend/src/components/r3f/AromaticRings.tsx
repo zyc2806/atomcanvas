@@ -1,0 +1,150 @@
+import React, { useLayoutEffect, useRef, useMemo } from 'react';
+import * as THREE from 'three';
+import { Outlines } from '@react-three/drei';
+import useStructureStore from '../../store/useStructureStore';
+import type { StandardStructureObject } from '../../types/store';
+import useAtomColors from '../../hooks/useAtomColors';
+import './materials/ToonHighlightMaterial';
+
+import { getNearestAtomIndexToRing } from './aromaticRingsUtils';
+
+interface AromaticRingsProps {
+    structure?: StandardStructureObject;
+}
+
+interface RingData {
+    key: string;
+    position: THREE.Vector3;
+    quaternion: THREE.Quaternion;
+    scale: THREE.Vector3;
+    color: THREE.Color;
+}
+
+const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
+    const { structureData, viewControls, visParams, sceneSettings } = useStructureStore();
+    const { getAtomColor, getAtomBaseColor } = useAtomColors();
+    const meshRef = useRef<THREE.InstancedMesh>(null);
+    const { showBonds, showShadows } = viewControls;
+    const { renderStyle, cartoonParams } = visParams;
+
+    const activeStructure = structure || structureData;
+
+    const rings = useMemo(() => {
+        if (!activeStructure?.visualization?.rings) return [];
+        return activeStructure.visualization.rings;
+    }, [activeStructure]);
+
+    const toonLightDir = useMemo(() => {
+        const pos = sceneSettings.keyLight.position;
+        return new THREE.Vector3(pos[0], pos[1], pos[2]).normalize();
+    }, [sceneSettings.keyLight.position]);
+
+    const processedRings = useMemo((): RingData[] => {
+        if (rings.length === 0) return [];
+
+        const data: RingData[] = [];
+        const defaultNormal = new THREE.Vector3(0, 0, 1);
+        const symbols = activeStructure?.structure?.symbols || [];
+        const rawPositions = activeStructure?.structure?.positions || [];
+        const positions: [number, number, number][] = [];
+        for (const pos of rawPositions) {
+            if (pos.length >= 3) {
+                positions.push([pos[0], pos[1], pos[2]]);
+            }
+        }
+
+        for (let i = 0; i < rings.length; i++) {
+            const [center, normal, radius] = rings[i];
+            if (center.length < 3 || normal.length < 3) continue;
+            
+            const position = new THREE.Vector3(center[0], center[1], center[2]);
+            const ringNormal = new THREE.Vector3(normal[0], normal[1], normal[2]).normalize();
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultNormal, ringNormal);
+            
+            // Scale logic from original code: radius * 0.6
+            const s = radius * 0.6;
+            const scale = new THREE.Vector3(s, s, s);
+            const ringCenter: [number, number, number] = [center[0], center[1], center[2]];
+            const nearestAtomIndex = getNearestAtomIndexToRing(ringCenter, positions);
+            const color = nearestAtomIndex !== null && symbols[nearestAtomIndex]
+                ? getAtomColor(nearestAtomIndex, symbols[nearestAtomIndex])
+                : getAtomBaseColor('C');
+
+            data.push({
+                key: `ring-${i}`,
+                position,
+                quaternion,
+                scale,
+                color
+            });
+        }
+        return data;
+    }, [rings, activeStructure, getAtomColor, getAtomBaseColor]);
+
+    useLayoutEffect(() => {
+        if (!meshRef.current || renderStyle === 'cartoon') return;
+        if (processedRings.length === 0) return;
+
+        const dummy = new THREE.Object3D();
+
+        for (let i = 0; i < processedRings.length; i++) {
+            const ring = processedRings[i];
+            dummy.position.copy(ring.position);
+            dummy.quaternion.copy(ring.quaternion);
+            dummy.scale.copy(ring.scale);
+            dummy.updateMatrix();
+            meshRef.current.setMatrixAt(i, dummy.matrix);
+            meshRef.current.setColorAt(i, ring.color);
+        }
+
+        meshRef.current.instanceMatrix.needsUpdate = true;
+        if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+
+    }, [processedRings, renderStyle]);
+
+    if (!showBonds || rings.length === 0) return null;
+
+    const shouldCastShadow = renderStyle === 'soft' && showShadows;
+    const outlineThickness = renderStyle === 'cartoon' ? cartoonParams.outlineThickness : 1;
+
+    if (renderStyle === 'cartoon') {
+        return (
+            <group>
+                {processedRings.map((ring) => (
+                    <mesh
+                        key={ring.key}
+                        position={ring.position}
+                        quaternion={ring.quaternion}
+                        scale={[ring.scale.x, ring.scale.y, ring.scale.z]}
+                    >
+                        <torusGeometry args={[1.0, 0.1, 16, 64]} />
+                        <toonHighlightMaterial
+                            uColor={ring.color}
+                            uLightDir={toonLightDir}
+                            uLightIntensity={sceneSettings.globalBrightness}
+                            uShadowThreshold={cartoonParams.shadowThreshold}
+                            uHighlightThreshold={cartoonParams.highlightThreshold}
+                            uShadowBrightness={cartoonParams.shadowBrightness}
+                        />
+                        <Outlines thickness={outlineThickness} color="black" />
+                    </mesh>
+                ))}
+            </group>
+        );
+    }
+
+    return (
+        <instancedMesh
+            ref={meshRef}
+            args={[undefined, undefined, processedRings.length]}
+            castShadow={shouldCastShadow}
+            receiveShadow={shouldCastShadow}
+        >
+            <torusGeometry args={[1.0, 0.1, 16, 64]} />
+            <meshStandardMaterial roughness={renderStyle === 'standard' ? 0.3 : 1} />
+            {renderStyle === 'standard' && <Outlines thickness={1} color="black" />}
+        </instancedMesh>
+    );
+};
+
+export default AromaticRings;

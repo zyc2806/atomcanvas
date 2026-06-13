@@ -1,0 +1,1 @@
+export { ToonHighlightMaterial } from './ToonHighlightMaterial';

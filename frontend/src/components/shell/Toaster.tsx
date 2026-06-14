@@ -1,5 +1,5 @@
 import { Snackbar, Alert } from '@mui/material';
-import useStructureStore from '../../store/useStructureStore';
+import { useStructureStore } from '../../store/useStructureStore';
 
 export function Toaster() {
   const notification = useStructureStore((s) => s.notification);
@@ -10,7 +10,7 @@ export function Toaster() {
       key={notification?.key}
       open={!!notification}
       autoHideDuration={2500}
-      onClose={clearNotification}
+      onClose={(_e, reason) => { if (reason !== 'clickaway') clearNotification(); }}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
     >
       {notification ? (

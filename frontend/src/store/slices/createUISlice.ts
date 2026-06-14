@@ -1,7 +1,5 @@
 import type { StateCreator } from 'zustand';
 import { bondService } from '../../services/bondService';
-
-let notificationCounter = 0;
 import type {
     CameraSnapshot,
     ViewControls,
@@ -10,6 +8,9 @@ import type {
     UISlice,
 } from '../../types/store';
 import axios from 'axios';
+
+// module-level counter; safe because ESM imports are hoisted
+let notificationCounter = 0;
 
 // Interface imported from types/store
 const generateExpressionFromSelection = (selectedAtoms: number[], symbols: string[]): string => {

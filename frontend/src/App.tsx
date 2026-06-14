@@ -4,6 +4,7 @@ import { TopBar } from './components/shell/TopBar';
 import { PanelHost } from './components/shell/PanelHost';
 import type { ActivePanel } from './components/shell/PanelHost';
 import { Toaster } from './components/shell/Toaster';
+import { SelectionActionBar } from './components/overlay/SelectionActionBar';
 import { useStructureStore } from './store/useStructureStore';
 import { structureService } from './services/structureService';
 import { useLoadAtomStyles } from './hooks/useLoadAtomStyles';
@@ -64,6 +65,7 @@ export default function App() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <ViewerCanvas />
+      <SelectionActionBar />
       <TopBar
         activePanel={activePanel}
         onTogglePanel={togglePanel}

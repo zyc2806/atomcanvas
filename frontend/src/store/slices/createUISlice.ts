@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { bondService } from '../../services/bondService';
+
+let notificationCounter = 0;
 import type {
     CameraSnapshot,
     ViewControls,
@@ -157,6 +159,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     userHasInteracted: false,
     cameraType: 'perspective',
     cameraApplyRevision: 0,
+    notification: null,
 
     rebuildAdjacencyMap: () => {},
 
@@ -410,6 +413,10 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         cameraViewTrigger: null,
     })),
     setSelectionExpression: (expression) => set({ selectionExpression: expression }),
+    notify: (message, severity = 'info') => set({
+        notification: { message, severity, key: ++notificationCounter },
+    }),
+    clearNotification: () => set({ notification: null }),
 
     setClusterIndices: (indices) => set({ clusterIndices: indices }),
     setSlabTarget: (id) => set({ slabTarget: id }),

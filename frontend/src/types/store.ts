@@ -160,6 +160,9 @@ export interface UISlice {
     userHasInteracted: boolean;
     cameraType: 'perspective' | 'orthographic';
     cameraApplyRevision: number;
+    notification: { message: string; severity: 'success' | 'info' | 'error'; key: number } | null;
+    notify: (message: string, severity?: 'success' | 'info' | 'error') => void;
+    clearNotification: () => void;
 
     setViewControls: (controls: Partial<ViewControls>) => void;
     setVisParams: (params: Partial<VisualizationParams>) => void;

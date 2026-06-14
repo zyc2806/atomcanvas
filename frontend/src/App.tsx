@@ -3,6 +3,7 @@ import ViewerCanvas from './components/r3f/ViewerCanvas';
 import { TopBar } from './components/shell/TopBar';
 import { PanelHost } from './components/shell/PanelHost';
 import type { ActivePanel } from './components/shell/PanelHost';
+import { Toaster } from './components/shell/Toaster';
 import { useStructureStore } from './store/useStructureStore';
 import { structureService } from './services/structureService';
 import { useLoadAtomStyles } from './hooks/useLoadAtomStyles';
@@ -69,6 +70,7 @@ export default function App() {
         onOpenFiles={onFiles}
       />
       <PanelHost activePanel={activePanel} onClose={() => setActivePanel(null)} />
+      <Toaster />
     </div>
   );
 }

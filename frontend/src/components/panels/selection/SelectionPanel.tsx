@@ -47,7 +47,7 @@ const SelectionPanel: React.FC = () => {
         structureData, selectedAtoms, updateSelection,
         setClusterIndices, setColorOverrides, clusterIndices,
         slabTarget, setSlabTarget, setSelectionMode,
-        selectionExpression, setSelectionExpression, activeTabId
+        selectionExpression, setSelectionExpression, activeTabId, notify
     } = useStructureStore();
 
     const getLatestActiveTabId = (): string | null => {
@@ -128,6 +128,9 @@ const SelectionPanel: React.FC = () => {
 
         handleSelectionAction(finalIndices, finalOp);
         setSelectionExpression(combineExpressions(operation === 'exclude' && finalOp === 'replace' ? '' : selectionExpression, expressionPart, operation));
+
+        const count = useStructureStore.getState().selectedAtoms.length;
+        notify(`Selected ${count} atom${count === 1 ? '' : 's'}`);
     };
 
     const handleSelectByElement = (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
@@ -191,10 +194,10 @@ const SelectionPanel: React.FC = () => {
 
         processSelection(indices, operation, `slab:${slabAxis},${slabClusters},${slabTarget + 1}`);
 
-        setColorOverrides(null);
+        setColorOverrides(useStructureStore.getState().perAtomColorOverrides ?? null);
         setClusterIndices(null);
         setSlabTarget(null);
-        setAnalysisMessage('Layer selected. Colors restored.');
+        setAnalysisMessage('Layer selected.');
     };
 
     return (

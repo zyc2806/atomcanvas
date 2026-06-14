@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -106,6 +106,10 @@ export function StylePanel() {
   const setOpacityOverrides = useStructureStore((s) => s.setOpacityOverrides);
   const radiusOverrides = useStructureStore((s) => s.radiusOverrides);
   const setRadiusOverrides = useStructureStore((s) => s.setRadiusOverrides);
+  const perAtomColorOverrides = useStructureStore((s) => s.perAtomColorOverrides);
+  const perAtomOpacityOverrides = useStructureStore((s) => s.perAtomOpacityOverrides);
+  const applySelectionColor = useStructureStore((s) => s.applySelectionColor);
+  const applySelectionSize = useStructureStore((s) => s.applySelectionSize);
 
   const symbols = useMemo<string[]>(
     () => structureData?.structure.symbols ?? [],
@@ -117,12 +121,9 @@ export function StylePanel() {
     [symbols],
   );
 
-  // Per-atom overrides (e.g. from the canvas selection) that the element-level
-  // styling must NOT clobber. We keep them in refs so a recompute triggered by an
+  // Per-atom overrides (e.g. from the canvas selection) live in the store and
+  // the element-level styling must NOT clobber them. A recompute triggered by an
   // element-style change re-merges them on top (per-atom override wins).
-  const perAtomColorRef = useRef<{ [i: number]: string } | null>(null);
-  const perAtomOpacityRef = useRef<{ [i: number]: number } | null>(null);
-
   useEffect(() => {
     if (symbols.length === 0) {
       return;
@@ -130,40 +131,33 @@ export function StylePanel() {
     const { colorOverrides: elColors, opacityOverrides: elOpacities } =
       elementStylesToAtomOverrides(symbols, elements);
 
-    const mergedColors = { ...elColors, ...(perAtomColorRef.current ?? {}) };
+    const mergedColors = { ...elColors, ...(perAtomColorOverrides ?? {}) };
     const mergedOpacities = {
       ...elOpacities,
-      ...(perAtomOpacityRef.current ?? {}),
+      ...(perAtomOpacityOverrides ?? {}),
     };
 
     setColorOverrides(Object.keys(mergedColors).length > 0 ? mergedColors : null);
     setOpacityOverrides(
       Object.keys(mergedOpacities).length > 0 ? mergedOpacities : null,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, symbols]);
+  }, [
+    elements,
+    symbols,
+    perAtomColorOverrides,
+    perAtomOpacityOverrides,
+    setColorOverrides,
+    setOpacityOverrides,
+  ]);
 
   const handleSelectedColor = (color: string) => {
-    const fromSelection: { [i: number]: string } = {};
-    selectedAtoms.forEach((idx) => {
-      fromSelection[idx] = color;
-    });
-    perAtomColorRef.current = {
-      ...(perAtomColorRef.current ?? {}),
-      ...fromSelection,
-    };
-    const existing = colorOverrides ?? {};
-    setColorOverrides({ ...existing, ...fromSelection });
+    applySelectionColor(selectedAtoms, color);
   };
 
   // Per-atom size override (multiplier) applied to every selected atom. The
   // renderer multiplies the element radius by this factor (default 1.0).
   const handleSelectedSize = (size: number) => {
-    const next = { ...(radiusOverrides ?? {}) };
-    selectedAtoms.forEach((idx) => {
-      next[idx] = size;
-    });
-    setRadiusOverrides(next);
+    applySelectionSize(selectedAtoms, size);
   };
 
   // Prefer a user override, then the effective CPK colour loaded from
@@ -364,8 +358,12 @@ export function StylePanel() {
           variant="outlined"
           onClick={() => {
             distinctElements.forEach((sym) => clearElementStyle(sym));
-            perAtomColorRef.current = null;
-            perAtomOpacityRef.current = null;
+            // Clear per-atom truth first so the element-restyle effect does not
+            // re-merge stale per-atom overrides back over the cleared maps.
+            useStructureStore.setState({
+              perAtomColorOverrides: null,
+              perAtomOpacityOverrides: null,
+            });
             setColorOverrides(null);
             setOpacityOverrides(null);
             setRadiusOverrides(null);

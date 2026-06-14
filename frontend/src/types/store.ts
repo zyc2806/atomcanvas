@@ -149,6 +149,11 @@ export interface UISlice {
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
     radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
+    applySelectionColor: (indices: number[], color: string) => void;
+    applySelectionSize: (indices: number[], scale: number) => void;
+    toggleSelectionHidden: (indices: number[]) => void;
     bondOverrides: { [key: string]: string } | null;
     bondOpacityOverrides: { [key: string]: number } | null;
     selectionMode: SelectionMode;

@@ -18,6 +18,8 @@ const createSnapshot = (state: StructureState): HistorySnapshot => ({
     colorOverrides: state.colorOverrides ? { ...state.colorOverrides } : null,
     opacityOverrides: state.opacityOverrides ? { ...state.opacityOverrides } : null,
     radiusOverrides: state.radiusOverrides ? { ...state.radiusOverrides } : null,
+    perAtomColorOverrides: state.perAtomColorOverrides ? { ...state.perAtomColorOverrides } : null,
+    perAtomOpacityOverrides: state.perAtomOpacityOverrides ? { ...state.perAtomOpacityOverrides } : null,
     atomStyles: state.atomStyles ? { ...state.atomStyles } : null,
 });
 
@@ -59,6 +61,8 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                 colorOverrides: previous.colorOverrides,
                     opacityOverrides: previous.opacityOverrides,
                     radiusOverrides: previous.radiusOverrides,
+                    perAtomColorOverrides: previous.perAtomColorOverrides,
+                    perAtomOpacityOverrides: previous.perAtomOpacityOverrides,
                     atomStyles: previous.atomStyles,
                 };
         });
@@ -98,6 +102,8 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                 colorOverrides: next.colorOverrides,
                     opacityOverrides: next.opacityOverrides,
                     radiusOverrides: next.radiusOverrides,
+                    perAtomColorOverrides: next.perAtomColorOverrides,
+                    perAtomOpacityOverrides: next.perAtomOpacityOverrides,
                     atomStyles: next.atomStyles,
                 };
         });
@@ -121,6 +127,8 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
             colorOverrides: snapshot?.colorOverrides !== undefined ? snapshot.colorOverrides : (state.colorOverrides ? { ...state.colorOverrides } : null),
             opacityOverrides: snapshot?.opacityOverrides !== undefined ? snapshot.opacityOverrides : (state.opacityOverrides ? { ...state.opacityOverrides } : null),
             radiusOverrides: snapshot?.radiusOverrides !== undefined ? snapshot.radiusOverrides : (state.radiusOverrides ? { ...state.radiusOverrides } : null),
+            perAtomColorOverrides: snapshot?.perAtomColorOverrides !== undefined ? snapshot.perAtomColorOverrides : (state.perAtomColorOverrides ? { ...state.perAtomColorOverrides } : null),
+            perAtomOpacityOverrides: snapshot?.perAtomOpacityOverrides !== undefined ? snapshot.perAtomOpacityOverrides : (state.perAtomOpacityOverrides ? { ...state.perAtomOpacityOverrides } : null),
             atomStyles: snapshot?.atomStyles !== undefined ? snapshot.atomStyles : (state.atomStyles ? { ...state.atomStyles } : null),
         };
 

@@ -240,6 +240,8 @@ export interface HistorySnapshot {
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
     radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
     atomStyles: { [symbol: string]: { color: string; radius: number } } | null;
 }
 
@@ -343,6 +345,8 @@ export interface StructureTab {
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
     radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
     camera: CameraSnapshot | null;
 }
 

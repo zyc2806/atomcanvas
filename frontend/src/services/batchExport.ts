@@ -22,14 +22,20 @@ function docForTab(tabId: string): StandardStructureObject {
   return tab.id === s.activeTabId ? (s.structureData ?? tab.doc) : tab.doc;
 }
 
-function buildSceneForDoc(doc: StandardStructureObject) {
+export function buildSceneForDoc(doc: StandardStructureObject) {
   const s = useStructureStore.getState();
   const symbols = doc.structure.symbols;
   const elementData = getElementData(symbols, s.atomStyles, s.visParams.atomScale);
+  // The viewport (Bonds.tsx) sizes bonds from visParams.bondRadius, not from
+  // bondsStyle.radius, so the exported glb must too — otherwise double/triple
+  // bonds would be offset/thickened by the wrong factor. We keep colorMode /
+  // uniformColor from bondsStyle but override its radius with the value the
+  // viewer actually renders. (The StylePanel "Radius" slider writes
+  // bondsStyle.radius, which the viewport does not read — a separate known bug.)
   return buildExportScene(
     { symbols, positions: doc.structure.positions },
-    { bonds: doc.visualization.bonds },
-    { elements: s.elements, bondsStyle: s.bondsStyle },
+    { bonds: doc.visualization.bonds, rings: doc.visualization.rings },
+    { elements: s.elements, bondsStyle: { ...s.bondsStyle, radius: s.visParams.bondRadius } },
     elementData,
   );
 }

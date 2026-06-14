@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atomcanvas"
+version = "0.1.0"
+description = "Visualization-only atomic-structure viewer — backend services, web API, and a headless chemistry CLI."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "ase",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "rdkit",
+    "pyparsing",
+    "networkx",
+    "click",
+]
+
+[project.scripts]
+# `pip install .` then `atomcanvas bonds structure.cif` — the scriptable core.
+atomcanvas = "app.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+# KNOWN LIMITATION: the import package is the generic name `app`, so installing
+# this distribution puts a top-level `app` on sys.path — a collision risk in a
+# shared environment. Install into an isolated venv (recommended), or use the
+# CLI without installing via `python -m app.cli`. Renaming app -> atomcanvas is
+# the proper long-term fix (touches all imports + run.sh/serve.sh + the entry point).
+include = ["app*"]

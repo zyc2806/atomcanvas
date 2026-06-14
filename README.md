@@ -53,6 +53,50 @@ scripts/stop.sh    # tear it down
 There is a tiny sample structure at `fixtures/water.xyz` to try the
 upload → edit-bond → export flow.
 
+### One command, one port (sharing / production)
+
+For everyone who isn't actively developing the frontend, skip the two-process
+dance — build the SPA once and let the FastAPI process serve it:
+
+```bash
+scripts/serve.sh   # builds the frontend if needed, then serves API + SPA
+                   # from a single uvicorn process at http://localhost:8000
+```
+
+`scripts/build.sh` does just the build step (frontend → `backend/static/`), and
+`serve.sh` calls it automatically when the bundle is missing. One process, one
+port, one URL — no Vite dev server and no `/api` proxy. Override host/port/python
+with `ATOMCANVAS_HOST` / `ATOMCANVAS_PORT` / `ATOMCANVAS_PYTHON`.
+
+## Command line (headless)
+
+The chemistry core — parsing, bond/order/ring detection, the selection DSL, and
+structure-file export — is scriptable without the browser:
+
+```bash
+cd backend
+python -m app.cli info    ../fixtures/water.xyz
+python -m app.cli bonds   ../fixtures/water.xyz --mode full --json
+python -m app.cli select  ../fixtures/water.xyz "elem:O"
+python -m app.cli convert ../fixtures/water.xyz out.cif
+```
+
+After `pip install .` (see below) the same commands are available as the
+`atomcanvas` console script. The *visual* exports (PNG screenshot, `.glb` model)
+stay browser-only — they depend on the live WebGL canvas.
+
+### Install the package
+
+```bash
+cd backend
+pip install .          # installs the backend + the `atomcanvas` CLI
+atomcanvas bonds structure.cif
+```
+
+Install into an **isolated virtualenv**: the import package is the generic name
+`app`, so a system-wide install would shadow anything else named `app`. (Or skip
+installing and use `python -m app.cli` as shown above.)
+
 ## Export formats
 
 From the **Export** menu in the top bar:

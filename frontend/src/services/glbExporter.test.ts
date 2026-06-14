@@ -59,3 +59,95 @@ describe('glbExporter', () => {
     expect(oColor).toBe('ff0000');
   });
 });
+
+// --- Fidelity: bond orders + aromatic rings must survive the glb export ----
+// The web viewer draws a double bond as two cylinders, a triple as three, and an
+// aromatic ring as a torus (Bonds.tsx / AromaticRings.tsx). The glb export must
+// match so a benzene exported for PowerPoint keeps its double bonds and donuts.
+
+const cc = { symbols: ['C', 'C'], positions: [[0, 0, 0], [1.5, 0, 0]] };
+const uniformStyle = {
+  elements: {},
+  bondsStyle: { style: 'cylinder' as const, radius: 0.12, colorMode: 'uniform' as const },
+};
+const ccData = {
+  C: { color: [0.4, 0.4, 0.4] as [number, number, number], radius: 0.77 },
+};
+
+// Total vertex count across every bond-cylinder mesh (one merged mesh per color
+// in uniform mode → a single mesh). Each cylinder has a fixed vertex count, so
+// N cylinders → N× the vertices of one.
+function bondVertexCount(scene: THREE.Scene): number {
+  const bonds = scene.getObjectByName('bonds');
+  if (!bonds) return 0;
+  let total = 0;
+  bonds.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) total += m.geometry.getAttribute('position').count;
+  });
+  return total;
+}
+
+function bondsBoundingBox(scene: THREE.Scene): THREE.Box3 {
+  const bonds = scene.getObjectByName('bonds')!;
+  const box = new THREE.Box3();
+  bonds.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) {
+      m.geometry.computeBoundingBox();
+      box.union(m.geometry.boundingBox!);
+    }
+  });
+  return box;
+}
+
+describe('glbExporter bond-order fidelity', () => {
+  const order = (o: number) =>
+    buildExportScene(cc, { bonds: [[0, 1, o]] }, uniformStyle, ccData);
+
+  it('emits one cylinder for a single bond, two for a double', () => {
+    expect(bondVertexCount(order(2))).toBe(2 * bondVertexCount(order(1)));
+  });
+
+  it('emits three cylinders for a triple bond', () => {
+    expect(bondVertexCount(order(3))).toBe(3 * bondVertexCount(order(1)));
+  });
+
+  it('offsets the double-bond cylinders off the bond axis', () => {
+    // bond runs along x; the two cylinders are pushed apart perpendicular to it,
+    // so the double bond is wider across the bond than a single bond.
+    const single = bondsBoundingBox(order(1));
+    const double = bondsBoundingBox(order(2));
+    const perpSingle = Math.max(single.max.y - single.min.y, single.max.z - single.min.z);
+    const perpDouble = Math.max(double.max.y - double.min.y, double.max.z - double.min.z);
+    expect(perpDouble).toBeGreaterThan(perpSingle + 1e-3);
+  });
+});
+
+describe('glbExporter aromatic-ring fidelity', () => {
+  const ring: [number[], number[], number] = [[0, 0, 0], [0, 0, 1], 1.4];
+
+  it('exports a rings node when the visualization carries rings', () => {
+    const scene = buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [ring] }, uniformStyle, ccData);
+    const rings = scene.getObjectByName('rings');
+    expect(rings).toBeDefined();
+    let meshes = 0;
+    rings!.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes += 1;
+    });
+    expect(meshes).toBeGreaterThan(0);
+  });
+
+  it('omits the rings node when there are no rings', () => {
+    const scene = buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [] }, uniformStyle, ccData);
+    expect(scene.getObjectByName('rings')).toBeUndefined();
+  });
+});
+
+describe('glbExporter robustness', () => {
+  it('skips bonds whose atom positions are non-finite (mirrors the viewport guard)', () => {
+    const broken = { symbols: ['C', 'C'], positions: [[0, 0, 0], [NaN, 0, 0]] };
+    const scene = buildExportScene(broken, { bonds: [[0, 1, 1]] }, uniformStyle, ccData);
+    expect(bondVertexCount(scene)).toBe(0);
+  });
+});

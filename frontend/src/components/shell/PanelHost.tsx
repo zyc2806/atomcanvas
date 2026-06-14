@@ -2,8 +2,9 @@ import { Drawer } from '@mui/material';
 import { StylePanel } from '../panels/StylePanel';
 import { BondEditPanel } from '../panels/BondEditPanel';
 import { ScenePanel } from '../panels/ScenePanel';
+import SelectionPanel from '../panels/selection/SelectionPanel';
 
-export type ActivePanel = 'style' | 'bonds' | 'scene' | null;
+export type ActivePanel = 'style' | 'bonds' | 'scene' | 'selection' | null;
 
 interface PanelHostProps {
   activePanel: ActivePanel;
@@ -16,6 +17,7 @@ export function PanelHost({ activePanel, onClose }: PanelHostProps) {
       {activePanel === 'style' && <StylePanel />}
       {activePanel === 'bonds' && <BondEditPanel />}
       {activePanel === 'scene' && <ScenePanel />}
+      {activePanel === 'selection' && <SelectionPanel />}
     </Drawer>
   );
 }

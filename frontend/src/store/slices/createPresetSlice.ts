@@ -4,7 +4,9 @@ import type { StructureState, PresetSlice } from '../../types/store';
 export const createPresetSlice: StateCreator<StructureState, [], [], PresetSlice> = (set) => ({
   presetName: 'default',
   elements: {},
-  bondsStyle: { style: 'cylinder', radius: 0.12, colorMode: 'element-split' },
+  // Default matches visParams.bondRadius (the field the viewport actually reads)
+  // so a fresh structure renders bonds at the size the panel reports.
+  bondsStyle: { style: 'cylinder', radius: 0.08, colorMode: 'element-split' },
 
   setElementStyle: (symbol, style) => set((s) => ({
     elements: { ...s.elements, [symbol]: { ...s.elements[symbol], ...style } },

@@ -148,6 +148,12 @@ export interface UISlice {
     cameraState: CameraState | null;
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
+    radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
+    applySelectionColor: (indices: number[], color: string) => void;
+    applySelectionSize: (indices: number[], scale: number) => void;
+    toggleSelectionHidden: (indices: number[]) => void;
     bondOverrides: { [key: string]: string } | null;
     bondOpacityOverrides: { [key: string]: number } | null;
     selectionMode: SelectionMode;
@@ -159,6 +165,9 @@ export interface UISlice {
     userHasInteracted: boolean;
     cameraType: 'perspective' | 'orthographic';
     cameraApplyRevision: number;
+    notification: { message: string; severity: 'success' | 'info' | 'error'; key: number } | null;
+    notify: (message: string, severity?: 'success' | 'info' | 'error') => void;
+    clearNotification: () => void;
 
     setViewControls: (controls: Partial<ViewControls>) => void;
     setVisParams: (params: Partial<VisualizationParams>) => void;
@@ -176,6 +185,7 @@ export interface UISlice {
     setCameraState: (cameraState: CameraState | null) => void;
     setColorOverrides: (overrides: { [index: number]: string } | null) => void;
     setOpacityOverrides: (overrides: { [index: number]: number } | null) => void;
+    setRadiusOverrides: (overrides: { [index: number]: number } | null) => void;
     setBondOverride: (bondId: string, color: string | null) => void;
     setMultipleBondOverrides: (overrides: { [key: string]: string | null }) => void;
     clearBondOverrides: () => void;
@@ -229,6 +239,9 @@ export interface HistorySnapshot {
     slabTarget: number | null;
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
+    radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
     atomStyles: { [symbol: string]: { color: string; radius: number } } | null;
 }
 
@@ -331,6 +344,9 @@ export interface StructureTab {
     bondOverrides: Record<string, string>;   // "i-j" -> "delete" | "1.0" | "2.0" | ...
     colorOverrides: { [index: number]: string } | null;
     opacityOverrides: { [index: number]: number } | null;
+    radiusOverrides: { [index: number]: number } | null;
+    perAtomColorOverrides: { [index: number]: string } | null;
+    perAtomOpacityOverrides: { [index: number]: number } | null;
     camera: CameraSnapshot | null;
 }
 

@@ -19,7 +19,10 @@ export interface SceneDoc {
   schemaVersion: number;
   kind: 'atomcanvas-scene';
   structures: Array<
-    Pick<StructureTab, 'name' | 'doc' | 'bondOverrides' | 'colorOverrides' | 'opacityOverrides'>
+    Pick<
+      StructureTab,
+      'name' | 'doc' | 'bondOverrides' | 'colorOverrides' | 'opacityOverrides' | 'radiusOverrides'
+    >
   >;
   style: Omit<StylePresetDoc, 'kind' | 'schemaVersion'>;
   camera: CameraSnapshot | null;
@@ -77,7 +80,10 @@ export function buildStylePreset(s: StructureState): StylePresetDoc {
     kind: 'atomcanvas-style',
     presetName: s.presetName,
     elements: s.elements,
-    bondsStyle: s.bondsStyle,
+    // visParams.bondRadius is the rendering source of truth; bondsStyle.radius is
+    // only a mirror and can go stale (e.g. setDisplayMode writes bondRadius alone),
+    // so persist the source of truth — matching the same substitution batchExport uses.
+    bondsStyle: { ...s.bondsStyle, radius: s.visParams.bondRadius },
     background: readBackground(s),
     lighting: readLighting(s),
   };
@@ -86,6 +92,9 @@ export function buildStylePreset(s: StructureState): StylePresetDoc {
 export function applyStylePreset(p: StylePresetDoc): void {
   const st = useStructureStore.getState();
   st.replacePreset({ presetName: p.presetName, elements: p.elements, bondsStyle: p.bondsStyle });
+  // The viewport sizes bonds from visParams.bondRadius, not bondsStyle.radius,
+  // so mirror the saved radius onto it or the loaded preset would not take effect.
+  st.setVisParams({ bondRadius: p.bondsStyle.radius });
   writeBackground(p.background);
   writeLighting(p.lighting);
 }
@@ -101,6 +110,7 @@ export function buildSceneDocument(s: StructureState): SceneDoc {
           bondOverrides: { ...s.topologyOverrides },
           colorOverrides: s.colorOverrides,
           opacityOverrides: s.opacityOverrides,
+          radiusOverrides: s.radiusOverrides,
           doc: s.structureData ?? t.doc,
         }
       : t,
@@ -111,12 +121,13 @@ export function buildSceneDocument(s: StructureState): SceneDoc {
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'atomcanvas-scene',
-    structures: tabs.map(({ name, doc, bondOverrides, colorOverrides, opacityOverrides }) => ({
+    structures: tabs.map(({ name, doc, bondOverrides, colorOverrides, opacityOverrides, radiusOverrides }) => ({
       name,
       doc,
       bondOverrides,
       colorOverrides,
       opacityOverrides,
+      radiusOverrides,
     })),
     style,
     camera: readCamera(s),
@@ -141,6 +152,8 @@ export function applySceneDocument(scene: SceneDoc): void {
               bondOverrides: entry.bondOverrides,
               colorOverrides: entry.colorOverrides,
               opacityOverrides: entry.opacityOverrides,
+              // Older scene files (pre-size-override) lack this field.
+              radiusOverrides: entry.radiusOverrides ?? null,
             }
           : t,
       ),
@@ -158,6 +171,7 @@ export function applySceneDocument(scene: SceneDoc): void {
       topologyOverrides: { ...target.bondOverrides },
       colorOverrides: target.colorOverrides ? { ...target.colorOverrides } : null,
       opacityOverrides: target.opacityOverrides ? { ...target.opacityOverrides } : null,
+      radiusOverrides: target.radiusOverrides ? { ...target.radiusOverrides } : null,
     });
     useStructureStore.getState().setStructureData(target.doc);
   }

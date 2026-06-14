@@ -7,12 +7,31 @@ import {
   FormControlLabel,
   Slider,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useStructureStore } from '../../store/useStructureStore';
 import { refreshTopology } from '../../services/topologyRefresh';
+import type { CartoonParams } from '../../types/store';
 
 type Vec3 = [number, number, number];
+
+// Cartoon (toon-shaded) render style exposes four tunable parameters. Ranges
+// mirror the parent ase-view ViewOptionsPanel so behaviour matches the renderer.
+const CARTOON_SLIDERS: {
+  key: keyof CartoonParams;
+  label: string;
+  testId: string;
+  min: number;
+  max: number;
+  step: number;
+}[] = [
+  { key: 'outlineThickness', label: 'Outline thickness', testId: 'outline-thickness', min: 0.5, max: 8, step: 0.1 },
+  { key: 'highlightThreshold', label: 'Highlight threshold', testId: 'highlight-threshold', min: 0.5, max: 1, step: 0.01 },
+  { key: 'shadowThreshold', label: 'Shadow threshold', testId: 'shadow-threshold', min: 0, max: 0.95, step: 0.01 },
+  { key: 'shadowBrightness', label: 'Shadow brightness', testId: 'shadow-brightness', min: 0.1, max: 1, step: 0.01 },
+];
 
 /** Centroid of the atom positions, or the origin when there is no structure. */
 function centroidOf(positions: Vec3[]): Vec3 {
@@ -49,6 +68,10 @@ export function ScenePanel() {
   const bondThreshold = useStructureStore((s) => s.visParams.bondThreshold);
   const setBondThreshold = useStructureStore((s) => s.setBondThreshold);
 
+  const renderStyle = useStructureStore((s) => s.visParams.renderStyle);
+  const cartoonParams = useStructureStore((s) => s.visParams.cartoonParams);
+  const setVisParams = useStructureStore((s) => s.setVisParams);
+
   const positions = useMemo<Vec3[]>(
     () => structureData?.structure.positions ?? [],
     [structureData],
@@ -76,6 +99,10 @@ export function ScenePanel() {
     debounceRef.current = setTimeout(() => {
       void refreshTopology();
     }, 300);
+  };
+
+  const handleCartoonParam = (key: keyof CartoonParams, value: number) => {
+    setVisParams({ cartoonParams: { ...cartoonParams, [key]: value } });
   };
 
   return (
@@ -173,6 +200,46 @@ export function ScenePanel() {
         aria-label="bond-threshold"
         slotProps={{ input: { 'data-testid': 'bond-threshold' } as never }}
       />
+
+      <Divider sx={{ my: 2 }} />
+
+      <Typography variant="subtitle2" gutterBottom>
+        Rendering
+      </Typography>
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={renderStyle}
+        onChange={(_, mode) => {
+          if (mode) setVisParams({ renderStyle: mode });
+        }}
+      >
+        <ToggleButton value="standard">Standard</ToggleButton>
+        <ToggleButton value="cartoon">Cartoon</ToggleButton>
+        <ToggleButton value="soft">Soft</ToggleButton>
+      </ToggleButtonGroup>
+
+      {renderStyle === 'cartoon' && (
+        <Box sx={{ mt: 1 }}>
+          {CARTOON_SLIDERS.map(({ key, label, testId, min, max, step }) => (
+            <Box key={key} sx={{ mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                {label} ({cartoonParams[key].toFixed(2)})
+              </Typography>
+              <Slider
+                size="small"
+                min={min}
+                max={max}
+                step={step}
+                value={cartoonParams[key]}
+                onChange={(_, v) => handleCartoonParam(key, v as number)}
+                aria-label={testId}
+                slotProps={{ input: { 'data-testid': testId } as never }}
+              />
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }

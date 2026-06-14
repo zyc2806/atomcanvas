@@ -7,7 +7,9 @@ pipeline:
     atomcanvas info     structure.cif
     atomcanvas bonds    structure.cif --mode full --json
     atomcanvas select   structure.cif "elem:C AND pos:z>10"
+    atomcanvas select   structure.cif "elem:C" --ast
     atomcanvas convert  POSCAR out.cif
+    atomcanvas convert  POSCAR carbons.xyz --select "elem:C"
 
 Run as ``atomcanvas`` (installed console script) or ``python -m app.cli``.
 
@@ -26,7 +28,7 @@ from ase.io import read
 
 from .services.export_ops import export_atoms_to_file
 from .services.geometry import get_bonds_and_ghosts
-from .services.selection_parser import parse_selection_expression
+from .services.selection_parser import parse_selection_expression, get_selection_ast
 
 # Map output extensions to the ASE format passed to write. Only formats the
 # export pipeline can actually round-trip are listed: PDB is deliberately absent
@@ -138,7 +140,15 @@ def bonds(path: str, bond_scale: float, mode: str, as_json: bool) -> None:
 @click.argument("path", type=click.Path())
 @click.argument("expression")
 @click.option("--bond-scale", default=1.2, show_default=True, help="Bond scale used by bonded/connected selectors.")
-def select(path: str, expression: str, bond_scale: float) -> None:
+@click.option("--ast", "as_ast", is_flag=True, help="Print the parsed expression AST instead of evaluating it.")
+def select(path: str, expression: str, bond_scale: float, as_ast: bool) -> None:
+    if as_ast:
+        try:
+            ast = get_selection_ast(expression)
+        except Exception as exc:
+            raise click.ClickException(f"Parse failed: {exc}")
+        click.echo(json.dumps(ast, indent=2))
+        return
     atoms = _read_atoms(path)
     try:
         indices = parse_selection_expression(atoms, expression, bond_scale=bond_scale)
@@ -153,8 +163,19 @@ def select(path: str, expression: str, bond_scale: float) -> None:
 @click.argument("input_path", type=click.Path())
 @click.argument("output_path", type=click.Path())
 @click.option("--format", "fmt", default=None, help="ASE format name (inferred from the output extension if omitted).")
-def convert(input_path: str, output_path: str, fmt: str | None) -> None:
+@click.option("--select", "selection", default=None, help='Export only atoms matching a selection DSL expression, e.g. "elem:C".')
+@click.option("--bond-scale", default=1.2, show_default=True, help="Bond scale for bonded/connected selectors used by --select.")
+def convert(input_path: str, output_path: str, fmt: str | None, selection: str | None, bond_scale: float) -> None:
     atoms = _read_atoms(input_path)
+    if selection is not None:
+        try:
+            idx = parse_selection_expression(atoms, selection, bond_scale=bond_scale)
+        except Exception as exc:
+            raise click.ClickException(f"Selection failed: {exc}")
+        idx = sorted(int(i) for i in idx)
+        if not idx:
+            raise click.ClickException("selection matched 0 atoms")
+        atoms = atoms[idx]
     out = Path(output_path)
     format_name = _infer_format(out, fmt)
     try:

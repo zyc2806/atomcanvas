@@ -12,3 +12,6 @@ test-results/
 logs/
 *.log
 .DS_Store
+
+# brainstorming visual companion
+.superpowers/

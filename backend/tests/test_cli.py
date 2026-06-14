@@ -13,6 +13,8 @@ import pytest
 from click.testing import CliRunner
 
 from app.cli import cli
+from ase import Atoms
+from ase.io import read, write
 
 WATER = Path(__file__).resolve().parents[2] / "fixtures" / "water.xyz"
 
@@ -123,3 +125,42 @@ def test_unreadable_file_is_clean_error(runner, tmp_path):
     result = runner.invoke(cli, ["bonds", str(missing)])
     assert result.exit_code != 0
     assert "Traceback" not in result.output
+
+
+def _write_ch4(path):
+    # 1 C + 4 H
+    atoms = Atoms('CH4', positions=[
+        (0, 0, 0), (0.6, 0.6, 0.6), (-0.6, -0.6, 0.6),
+        (-0.6, 0.6, -0.6), (0.6, -0.6, -0.6),
+    ])
+    write(str(path), atoms)
+
+
+def test_convert_select_exports_subset(tmp_path):
+    src = tmp_path / "ch4.xyz"
+    out = tmp_path / "carbons.xyz"
+    _write_ch4(src)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["convert", str(src), str(out), "--select", "elem:C"])
+    assert result.exit_code == 0, result.output
+    assert len(read(str(out))) == 1  # only the carbon survives
+
+
+def test_convert_select_empty_match_errors(tmp_path):
+    src = tmp_path / "ch4.xyz"
+    out = tmp_path / "none.xyz"
+    _write_ch4(src)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["convert", str(src), str(out), "--select", "elem:Xe"])
+    assert result.exit_code != 0
+    assert "0 atoms" in result.output
+
+
+def test_select_ast_prints_ast_json(tmp_path):
+    src = tmp_path / "ch4.xyz"
+    _write_ch4(src)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["select", str(src), "elem:C AND pos:z>0", "--ast"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, dict)  # an AST node object

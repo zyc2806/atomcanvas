@@ -1,8 +1,9 @@
 import { useRef } from 'react';
-import { AppBar, Toolbar, Button, IconButton, Box, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Button, Box, Tooltip } from '@mui/material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import LinkIcon from '@mui/icons-material/Link';
 import TuneIcon from '@mui/icons-material/Tune';
+import HighlightAltIcon from '@mui/icons-material/HighlightAlt';
 import { StructureTabs } from './StructureTabs';
 import { ExportMenu } from './ExportMenu';
 import type { ActivePanel } from './PanelHost';
@@ -40,34 +41,48 @@ export function TopBar({ activePanel, onTogglePanel, onOpenFiles }: TopBarProps)
         <Box sx={{ flexGrow: 1 }} />
 
         <Tooltip title="Style (s)">
-          <IconButton
+          <Button
             size="small"
-            color={activePanel === 'style' ? 'primary' : 'default'}
+            startIcon={<PaletteIcon fontSize="small" />}
+            color={activePanel === 'style' ? 'primary' : 'inherit'}
             onClick={() => onTogglePanel('style')}
             aria-label="toggle style panel"
           >
-            <PaletteIcon fontSize="small" />
-          </IconButton>
+            Style
+          </Button>
         </Tooltip>
         <Tooltip title="Bonds (b)">
-          <IconButton
+          <Button
             size="small"
-            color={activePanel === 'bonds' ? 'primary' : 'default'}
+            startIcon={<LinkIcon fontSize="small" />}
+            color={activePanel === 'bonds' ? 'primary' : 'inherit'}
             onClick={() => onTogglePanel('bonds')}
             aria-label="toggle bonds panel"
           >
-            <LinkIcon fontSize="small" />
-          </IconButton>
+            Bonds
+          </Button>
         </Tooltip>
         <Tooltip title="Scene (c)">
-          <IconButton
+          <Button
             size="small"
-            color={activePanel === 'scene' ? 'primary' : 'default'}
+            startIcon={<TuneIcon fontSize="small" />}
+            color={activePanel === 'scene' ? 'primary' : 'inherit'}
             onClick={() => onTogglePanel('scene')}
             aria-label="toggle scene panel"
           >
-            <TuneIcon fontSize="small" />
-          </IconButton>
+            Scene
+          </Button>
+        </Tooltip>
+        <Tooltip title="Selection (a)">
+          <Button
+            size="small"
+            startIcon={<HighlightAltIcon fontSize="small" />}
+            color={activePanel === 'selection' ? 'primary' : 'inherit'}
+            onClick={() => onTogglePanel('selection')}
+            aria-label="toggle selection panel"
+          >
+            Select
+          </Button>
         </Tooltip>
 
         <ExportMenu />

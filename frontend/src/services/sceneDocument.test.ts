@@ -26,6 +26,8 @@ describe('style preset round-trip', () => {
   it('build → apply restores element styles and bond style', () => {
     const st = useStructureStore.getState();
     st.setElementStyle('C', { color: '#101010' });
+    // The slider drives visParams.bondRadius (source of truth) + the mirror.
+    st.setVisParams({ bondRadius: 0.2 });
     st.setBondsStyle({ radius: 0.2 });
     const preset = buildStylePreset(useStructureStore.getState());
     expect(preset.kind).toBe('atomcanvas-style');
@@ -37,6 +39,27 @@ describe('style preset round-trip', () => {
     applyStylePreset(preset);
     expect(useStructureStore.getState().elements['C']).toEqual({ color: '#101010' });
     expect(useStructureStore.getState().bondsStyle.radius).toBe(0.2);
+  });
+
+  it('buildStylePreset serializes visParams.bondRadius (source of truth), not a stale mirror', () => {
+    const st = useStructureStore.getState();
+    st.setVisParams({ bondRadius: 0.3 });
+    // Diverge the bondsStyle.radius mirror, as setDisplayMode would, to prove the
+    // source of truth is what gets persisted.
+    st.setBondsStyle({ radius: 0.1 });
+    const preset = buildStylePreset(useStructureStore.getState());
+    expect(preset.bondsStyle.radius).toBe(0.3);
+  });
+
+  it('applyStylePreset hydrates visParams.bondRadius from the saved bond radius', () => {
+    const st = useStructureStore.getState();
+    st.setVisParams({ bondRadius: 0.2 });
+    const preset = buildStylePreset(useStructureStore.getState());
+    // Diverge the live viewport radius from the saved one before re-applying.
+    st.setVisParams({ bondRadius: 0.08 });
+    applyStylePreset(preset);
+    // The viewport reads visParams.bondRadius, so loading a preset must hydrate it.
+    expect(useStructureStore.getState().visParams.bondRadius).toBe(0.2);
   });
 
   it('round-trips background and lighting through the scene store', () => {
@@ -67,6 +90,20 @@ describe('scene document round-trip', () => {
     expect(s.tabs).toHaveLength(1);
     expect(s.tabs[0].name).toBe('w1');
     expect(s.topologyOverrides).toEqual({ '0-1': 'delete' });
+  });
+
+  it('persists per-atom radiusOverrides through a scene round-trip', () => {
+    useStructureStore.getState().addTab(doc(), 'w1');
+    useStructureStore.getState().setRadiusOverrides({ 0: 1.7 });
+    const scene = buildSceneDocument(useStructureStore.getState());
+    useStructureStore.setState({
+      tabs: [],
+      activeTabId: null,
+      topologyOverrides: {},
+      radiusOverrides: null,
+    });
+    applySceneDocument(scene);
+    expect(useStructureStore.getState().radiusOverrides).toEqual({ 0: 1.7 });
   });
 
   it('restores multiple tabs and the active index', () => {

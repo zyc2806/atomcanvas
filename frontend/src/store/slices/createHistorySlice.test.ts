@@ -72,6 +72,25 @@ describe('createHistorySlice', () => {
     expect(result.current.atomStyles).toEqual({ H: { color: '#0000ff', radius: 1.2 } });
   });
 
+  it('should capture and restore radiusOverrides through undo', () => {
+    const { result } = renderHook(() => useStructureStore());
+
+    act(() => {
+      result.current.setRadiusOverrides({ 0: 1.5 });
+    });
+    act(() => {
+      result.current.pushHistory();
+    });
+    act(() => {
+      result.current.setRadiusOverrides({ 1: 0.5 });
+    });
+    act(() => {
+      result.current.undo();
+    });
+
+    expect(result.current.radiusOverrides).toEqual({ 0: 1.5 });
+  });
+
   it('should capture and restore full state in pushHistory/redo', () => {
     const { result } = renderHook(() => useStructureStore());
 

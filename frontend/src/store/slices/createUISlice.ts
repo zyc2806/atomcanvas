@@ -9,6 +9,9 @@ import type {
 } from '../../types/store';
 import axios from 'axios';
 
+// module-level counter; safe because ESM imports are hoisted
+let notificationCounter = 0;
+
 // Interface imported from types/store
 const generateExpressionFromSelection = (selectedAtoms: number[], symbols: string[]): string => {
     if (selectedAtoms.length === 0) return '';
@@ -144,6 +147,9 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     cameraState: null,
     colorOverrides: null,
     opacityOverrides: null,
+    radiusOverrides: null,
+    perAtomColorOverrides: null,
+    perAtomOpacityOverrides: null,
     bondOverrides: null,
     bondOpacityOverrides: null,
     selectionMode: 'single',
@@ -156,6 +162,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     userHasInteracted: false,
     cameraType: 'perspective',
     cameraApplyRevision: 0,
+    notification: null,
 
     rebuildAdjacencyMap: () => {},
 
@@ -229,6 +236,34 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     setCameraState: (cameraState) => set({ cameraState }),
     setColorOverrides: (overrides) => set({ colorOverrides: overrides }),
     setOpacityOverrides: (overrides) => set({ opacityOverrides: overrides }),
+    setRadiusOverrides: (overrides) => set({ radiusOverrides: overrides }),
+    applySelectionColor: (indices, color) => set((state) => {
+        if (indices.length === 0) return {};
+        const perAtom = { ...(state.perAtomColorOverrides ?? {}) };
+        const visible = { ...(state.colorOverrides ?? {}) };
+        indices.forEach((i) => { perAtom[i] = color; visible[i] = color; });
+        return { perAtomColorOverrides: perAtom, colorOverrides: visible };
+    }),
+    applySelectionSize: (indices, scale) => set((state) => {
+        if (indices.length === 0) return {};
+        const next = { ...(state.radiusOverrides ?? {}) };
+        indices.forEach((i) => { next[i] = scale; });
+        return { radiusOverrides: next };
+    }),
+    toggleSelectionHidden: (indices) => set((state) => {
+        if (indices.length === 0) return {};
+        const perAtom = { ...(state.perAtomOpacityOverrides ?? {}) };
+        const visible = { ...(state.opacityOverrides ?? {}) };
+        const allHidden = indices.every((i) => perAtom[i] === 0);
+        indices.forEach((i) => {
+            if (allHidden) { delete perAtom[i]; delete visible[i]; }
+            else { perAtom[i] = 0; visible[i] = 0; }
+        });
+        return {
+            perAtomOpacityOverrides: Object.keys(perAtom).length ? perAtom : null,
+            opacityOverrides: Object.keys(visible).length ? visible : null,
+        };
+    }),
     setBondOverride: (bondId, color) => set((state) => {
         const currentOverrides = state.bondOverrides || {};
         if (color === null) {
@@ -402,11 +437,18 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     setSelectionMode: (mode) => set((state) => ({
         selectionMode: mode,
         clusterIndices: mode === 'slab' ? state.clusterIndices : null,
-        colorOverrides: mode === 'slab' ? state.colorOverrides : null,
+        // Non-slab: drop transient slab/cluster coloring but keep per-atom styling.
+        colorOverrides: mode === 'slab' ? state.colorOverrides : (state.perAtomColorOverrides ?? null),
+        opacityOverrides: mode === 'slab' ? state.opacityOverrides : (state.perAtomOpacityOverrides ?? null),
+        // radiusOverrides is purely per-atom user styling — never auto-cleared by mode.
         slabTarget: mode === 'slab' ? state.slabTarget : null,
         cameraViewTrigger: null,
     })),
     setSelectionExpression: (expression) => set({ selectionExpression: expression }),
+    notify: (message, severity = 'info') => set({
+        notification: { message, severity, key: ++notificationCounter },
+    }),
+    clearNotification: () => set({ notification: null }),
 
     setClusterIndices: (indices) => set({ clusterIndices: indices }),
     setSlabTarget: (id) => set({ slabTarget: id }),
@@ -474,6 +516,9 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         selectionMode: 'single',
         colorOverrides: null,
         opacityOverrides: null,
+        radiusOverrides: null,
+        perAtomColorOverrides: null,
+        perAtomOpacityOverrides: null,
         bondOverrides: null,
         bondOpacityOverrides: null,
         slabTarget: null,
@@ -490,6 +535,9 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         slabTarget: null,
         colorOverrides: null,
         opacityOverrides: null,
+        radiusOverrides: null,
+        perAtomColorOverrides: null,
+        perAtomOpacityOverrides: null,
         bondOpacityOverrides: null,
         selectionMode: 'single',
     })

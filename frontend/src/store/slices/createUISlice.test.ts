@@ -130,6 +130,30 @@ describe('createUISlice', () => {
     expect(result.current.visParams.cartoonParams.outlineThickness).toBe(5);
   });
 
+  describe('radiusOverrides', () => {
+    it('should initialize radiusOverrides as null', () => {
+      const { result } = renderHook(() => useStructureStore());
+      expect(result.current.radiusOverrides).toBeNull();
+    });
+
+    it('should set radiusOverrides via setRadiusOverrides', () => {
+      const { result } = renderHook(() => useStructureStore());
+      act(() => {
+        result.current.setRadiusOverrides({ 1: 1.5, 2: 1.5 });
+      });
+      expect(result.current.radiusOverrides).toEqual({ 1: 1.5, 2: 1.5 });
+    });
+
+    it('should clear radiusOverrides on resetUIState', () => {
+      const { result } = renderHook(() => useStructureStore());
+      act(() => {
+        result.current.setRadiusOverrides({ 0: 2.0 });
+        result.current.resetUIState();
+      });
+      expect(result.current.radiusOverrides).toBeNull();
+    });
+  });
+
   describe('toggleSelection', () => {
     it('should auto-select bond when 2 connected atoms are selected', async () => {
       const { result } = renderHook(() => useStructureStore());

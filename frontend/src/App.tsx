@@ -3,6 +3,8 @@ import ViewerCanvas from './components/r3f/ViewerCanvas';
 import { TopBar } from './components/shell/TopBar';
 import { PanelHost } from './components/shell/PanelHost';
 import type { ActivePanel } from './components/shell/PanelHost';
+import { Toaster } from './components/shell/Toaster';
+import { SelectionActionBar } from './components/overlay/SelectionActionBar';
 import { useStructureStore } from './store/useStructureStore';
 import { structureService } from './services/structureService';
 import { useLoadAtomStyles } from './hooks/useLoadAtomStyles';
@@ -11,6 +13,7 @@ const PANEL_KEYS: Record<string, Exclude<ActivePanel, null>> = {
   s: 'style',
   b: 'bonds',
   c: 'scene',
+  a: 'selection',
 };
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -62,12 +65,14 @@ export default function App() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <ViewerCanvas />
+      <SelectionActionBar />
       <TopBar
         activePanel={activePanel}
         onTogglePanel={togglePanel}
         onOpenFiles={onFiles}
       />
       <PanelHost activePanel={activePanel} onClose={() => setActivePanel(null)} />
+      <Toaster />
     </div>
   );
 }

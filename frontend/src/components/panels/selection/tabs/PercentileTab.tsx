@@ -10,9 +10,10 @@ interface PercentileTabProps {
         expression: string,
         originStructureId?: string | null,
     ) => void;
+    operation?: 'replace' | 'add' | 'filter' | 'exclude';
 }
 
-const PercentileTab: React.FC<PercentileTabProps> = ({ onSelect }) => {
+const PercentileTab: React.FC<PercentileTabProps> = ({ onSelect, operation = 'replace' }) => {
     const { structureData, activeTabId } = useStructureStore();
 
     const getLatestActiveTabId = (): string | null => {
@@ -82,12 +83,9 @@ const PercentileTab: React.FC<PercentileTabProps> = ({ onSelect }) => {
                 />
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelectByPercentile('replace')}>Replace</Button>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelectByPercentile('add')}>Add</Button>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelectByPercentile('filter')}>Filter</Button>
-                <Button fullWidth variant="outlined" size="small" color="error" onClick={() => handleSelectByPercentile('exclude')}>Exclude</Button>
-            </Box>
+            <Button fullWidth variant="contained" size="small" onClick={() => handleSelectByPercentile(operation)}>
+                Apply
+            </Button>
         </Box>
     );
 };

@@ -26,14 +26,14 @@ describe('ExtendTab', () => {
     (useStructureStore as unknown as Mock).mockReturnValue({
       structureData: { structure }, selectedAtoms: [], bondOverrides: {}, visParams: {},
     });
-    render(<ExtendTab onSelect={onSelect} />);
-    expect(screen.getByRole('button', { name: /Replace/i })).toBeDisabled();
+    render(<ExtendTab onSelect={onSelect} operation="replace" />);
+    expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled();
   });
 
-  it('emits extend:@0;1 (default 1 hop) and forwards indices on Replace', async () => {
+  it('emits extend:@0;1 (default 1 hop) and forwards indices on Apply', async () => {
     (selectionService.parseExpression as Mock).mockResolvedValue({ indices: [0, 1] });
-    render(<ExtendTab onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole('button', { name: /Replace/i }));
+    render(<ExtendTab onSelect={onSelect} operation="replace" />);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() => {
       expect(selectionService.parseExpression).toHaveBeenCalledWith(
         structure, 'extend:@0;1', { '0-1': 'single' }, 1.2,

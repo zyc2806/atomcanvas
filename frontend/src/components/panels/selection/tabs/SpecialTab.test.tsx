@@ -17,10 +17,10 @@ describe('SpecialTab', () => {
     (useStructureStore as unknown as Mock).mockReturnValue({ structureData: { structure } });
   });
 
-  it('emits fixed and forwards indices on Replace', async () => {
+  it('emits fixed and forwards indices on Apply', async () => {
     (selectionService.parseExpression as Mock).mockResolvedValue({ indices: [0] });
-    render(<SpecialTab onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole('button', { name: /Replace/i }));
+    render(<SpecialTab onSelect={onSelect} operation="replace" />);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() => {
       expect(selectionService.parseExpression).toHaveBeenCalledWith(structure, 'fixed');
       expect(onSelect).toHaveBeenCalledWith([0], 'replace', 'fixed', null);

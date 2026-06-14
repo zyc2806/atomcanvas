@@ -10,9 +10,10 @@ interface SphereTabProps {
         expression: string,
         originStructureId?: string | null,
     ) => void;
+    operation?: 'replace' | 'add' | 'filter' | 'exclude';
 }
 
-const SphereTab: React.FC<SphereTabProps> = ({ onSelect }) => {
+const SphereTab: React.FC<SphereTabProps> = ({ onSelect, operation = 'replace' }) => {
     const { structureData, activeTabId } = useStructureStore();
 
     const getLatestActiveTabId = (): string | null => {
@@ -103,12 +104,9 @@ const SphereTab: React.FC<SphereTabProps> = ({ onSelect }) => {
                 onChange={e => setRadius(Math.max(0, +e.target.value))}
                 sx={{ mb: 2 }}
             />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelect('replace')}>Replace</Button>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelect('add')}>Add</Button>
-                <Button fullWidth variant="outlined" size="small" onClick={() => handleSelect('filter')}>Filter</Button>
-                <Button fullWidth variant="outlined" size="small" color="error" onClick={() => handleSelect('exclude')}>Exclude</Button>
-            </Box>
+            <Button fullWidth variant="contained" size="small" onClick={() => handleSelect(operation)}>
+                Apply
+            </Button>
         </Box>
     );
 };

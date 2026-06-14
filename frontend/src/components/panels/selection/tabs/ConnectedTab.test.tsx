@@ -26,14 +26,14 @@ describe('ConnectedTab', () => {
     (useStructureStore as unknown as Mock).mockReturnValue({
       structureData: { structure }, selectedAtoms: [], bondOverrides: {}, visParams: {},
     });
-    render(<ConnectedTab onSelect={onSelect} />);
-    expect(screen.getByRole('button', { name: /Replace/i })).toBeDisabled();
+    render(<ConnectedTab onSelect={onSelect} operation="replace" />);
+    expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled();
   });
 
-  it('emits connected:@0,@1 and forwards indices on Replace', async () => {
+  it('emits connected:@0,@1 and forwards indices on Apply', async () => {
     (selectionService.parseExpression as Mock).mockResolvedValue({ indices: [0, 1, 2] });
-    render(<ConnectedTab onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole('button', { name: /Replace/i }));
+    render(<ConnectedTab onSelect={onSelect} operation="replace" />);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() => {
       expect(selectionService.parseExpression).toHaveBeenCalledWith(
         structure, 'connected:@0,@1', { '0-1': 'single' }, 1.2,

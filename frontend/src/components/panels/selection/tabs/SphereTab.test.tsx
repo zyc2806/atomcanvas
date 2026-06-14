@@ -17,10 +17,10 @@ describe('SphereTab', () => {
     (useStructureStore as unknown as Mock).mockReturnValue({ structureData: { structure } });
   });
 
-  it('emits sphere:@0,5 (default atom mode, radius 5) on Replace', async () => {
+  it('emits sphere:@0,5 (default atom mode, radius 5) on Apply', async () => {
     (selectionService.parseExpression as Mock).mockResolvedValue({ indices: [0, 1] });
-    render(<SphereTab onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole('button', { name: /Replace/i }));
+    render(<SphereTab onSelect={onSelect} operation="replace" />);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() => {
       expect(selectionService.parseExpression).toHaveBeenCalledWith(structure, 'sphere:@0,5');
       expect(onSelect).toHaveBeenCalledWith([0, 1], 'replace', 'sphere:@0,5', null);

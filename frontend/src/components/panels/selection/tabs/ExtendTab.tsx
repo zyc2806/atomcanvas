@@ -10,9 +10,10 @@ interface ExtendTabProps {
         expression: string,
         originStructureId?: string | null,
     ) => void;
+    operation?: 'replace' | 'add' | 'filter' | 'exclude';
 }
 
-const ExtendTab: React.FC<ExtendTabProps> = ({ onSelect }) => {
+const ExtendTab: React.FC<ExtendTabProps> = ({ onSelect, operation = 'replace' }) => {
     const { structureData, selectedAtoms, bondOverrides, visParams, activeTabId } = useStructureStore();
     const [extendHops, setExtendHops] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -71,45 +72,15 @@ const ExtendTab: React.FC<ExtendTabProps> = ({ onSelect }) => {
                 sx={{ mb: 2 }}
                 disabled={loading}
             />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleExtendSelection('replace')}
-                    disabled={!hasSelection || loading}
-                >
-                    Replace
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleExtendSelection('add')}
-                    disabled={!hasSelection || loading}
-                >
-                    Add
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleExtendSelection('filter')}
-                    disabled={!hasSelection || loading}
-                >
-                    Filter
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    color="error"
-                    onClick={() => handleExtendSelection('exclude')}
-                    disabled={!hasSelection || loading}
-                >
-                    Exclude
-                </Button>
-            </Box>
+            <Button
+                fullWidth
+                variant="contained"
+                size="small"
+                onClick={() => handleExtendSelection(operation)}
+                disabled={!hasSelection || loading}
+            >
+                Apply
+            </Button>
         </Box>
     );
 };

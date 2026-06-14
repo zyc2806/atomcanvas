@@ -10,9 +10,10 @@ interface ConnectedTabProps {
         expression: string,
         originStructureId?: string | null,
     ) => void;
+    operation?: 'replace' | 'add' | 'filter' | 'exclude';
 }
 
-const ConnectedTab: React.FC<ConnectedTabProps> = ({ onSelect }) => {
+const ConnectedTab: React.FC<ConnectedTabProps> = ({ onSelect, operation = 'replace' }) => {
     const { structureData, selectedAtoms, bondOverrides, visParams, activeTabId } = useStructureStore();
     const [loading, setLoading] = useState(false);
 
@@ -59,45 +60,15 @@ const ConnectedTab: React.FC<ConnectedTabProps> = ({ onSelect }) => {
             <Typography variant="body2" align="center" sx={{ mb: 2, fontWeight: 'bold' }}>
                 {hasSelection ? `Selected: ${selectedAtoms.length} atom(s)` : 'No atom selected'}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectConnected('replace')}
-                    disabled={!hasSelection || loading}
-                >
-                    Replace
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectConnected('add')}
-                    disabled={!hasSelection || loading}
-                >
-                    Add
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectConnected('filter')}
-                    disabled={!hasSelection || loading}
-                >
-                    Filter
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    color="error"
-                    onClick={() => handleSelectConnected('exclude')}
-                    disabled={!hasSelection || loading}
-                >
-                    Exclude
-                </Button>
-            </Box>
+            <Button
+                fullWidth
+                variant="contained"
+                size="small"
+                onClick={() => handleSelectConnected(operation)}
+                disabled={!hasSelection || loading}
+            >
+                Apply
+            </Button>
         </Box>
     );
 };

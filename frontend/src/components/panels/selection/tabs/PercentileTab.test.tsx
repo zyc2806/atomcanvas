@@ -17,10 +17,10 @@ describe('PercentileTab', () => {
     (useStructureStore as unknown as Mock).mockReturnValue({ structureData: { structure } });
   });
 
-  it('emits pct:z,0,100 (default axis z, 0–100) on Replace', async () => {
+  it('emits pct:z,0,100 (default axis z, 0–100) on Apply', async () => {
     (selectionService.parseExpression as Mock).mockResolvedValue({ indices: [2] });
-    render(<PercentileTab onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole('button', { name: /Replace/i }));
+    render(<PercentileTab onSelect={onSelect} operation="replace" />);
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }));
     await waitFor(() => {
       expect(selectionService.parseExpression).toHaveBeenCalledWith(structure, 'pct:z,0,100');
       expect(onSelect).toHaveBeenCalledWith([2], 'replace', 'pct:z,0,100', null);

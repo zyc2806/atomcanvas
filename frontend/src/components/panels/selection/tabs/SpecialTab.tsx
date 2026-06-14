@@ -10,9 +10,10 @@ interface SpecialTabProps {
         expression: string,
         originStructureId?: string | null,
     ) => void;
+    operation?: 'replace' | 'add' | 'filter' | 'exclude';
 }
 
-const SpecialTab: React.FC<SpecialTabProps> = ({ onSelect }) => {
+const SpecialTab: React.FC<SpecialTabProps> = ({ onSelect, operation = 'replace' }) => {
     const { structureData, activeTabId } = useStructureStore();
     const [loading, setLoading] = useState(false);
 
@@ -58,45 +59,15 @@ const SpecialTab: React.FC<SpecialTabProps> = ({ onSelect }) => {
                 Select atoms that have FixAtoms constraints applied.
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectFixed('replace')}
-                    disabled={loading}
-                >
-                    Replace
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectFixed('add')}
-                    disabled={loading}
-                >
-                    Add
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleSelectFixed('filter')}
-                    disabled={loading}
-                >
-                    Filter
-                </Button>
-                <Button
-                    fullWidth
-                    variant="outlined"
-                    size="small"
-                    color="error"
-                    onClick={() => handleSelectFixed('exclude')}
-                    disabled={loading}
-                >
-                    Exclude
-                </Button>
-            </Box>
+            <Button
+                fullWidth
+                variant="contained"
+                size="small"
+                onClick={() => handleSelectFixed(operation)}
+                disabled={loading}
+            >
+                Apply
+            </Button>
         </Box>
     );
 };

@@ -19,15 +19,27 @@ describe('SelectionPanel', () => {
     expect(screen.getByText(/2 atoms selected/)).toBeInTheDocument();
   });
 
-  it('Element tab Replace selects all atoms of that element', async () => {
+  it('Element method Apply selects all atoms of that element', async () => {
     render(<SelectionPanel />);
-    fireEvent.click(screen.getByLabelText('Advanced Selection'));
-    // Element tab is index 0 and shown by default; default element is the first symbol 'H'.
-    fireEvent.click(screen.getByRole('button', { name: /^Replace$/i }));
+    // Element method is the default active chip; default element is the first symbol 'H'.
+    fireEvent.click(screen.getByRole('button', { name: /^Apply$/i }));
     await waitFor(() => {
       // H atoms are indices 1 and 2.
       expect(useStructureStore.getState().selectedAtoms.sort()).toEqual([1, 2]);
       expect(useStructureStore.getState().selectionExpression).toBe('elem:H');
     });
+  });
+
+  it('shows method chips with no Advanced toggle', () => {
+    render(<SelectionPanel />);
+    expect(screen.queryByLabelText('Advanced Selection')).not.toBeInTheDocument();
+    ['Element', 'Label', 'Position', 'Slab', 'Sphere', 'Bonded', 'Percentile', 'Extend', 'Special', 'Connected']
+      .forEach((m) => expect(screen.getByRole('button', { name: m })).toBeInTheDocument());
+  });
+
+  it('keeps the expression editor collapsed behind an Advanced disclosure', () => {
+    render(<SelectionPanel />);
+    expect(screen.getByText(/expression/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Selection Expression')).not.toBeInTheDocument();
   });
 });

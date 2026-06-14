@@ -33,10 +33,12 @@ function ColorSwatch({
   color,
   onChange,
   size = 24,
+  testId,
 }: {
   color: string;
   onChange: (color: string) => void;
   size?: number;
+  testId?: string;
 }) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   return (
@@ -45,13 +47,17 @@ function ColorSwatch({
         component="button"
         type="button"
         aria-label="pick color"
+        data-testid={testId}
         onClick={(e) => setAnchorEl(e.currentTarget)}
+        // The dynamic fill lives in an inline style (not sx) so it is the
+        // element's own backgroundColor — readable in tests and overriding the
+        // emotion class deterministically.
+        style={{ backgroundColor: color }}
         sx={{
           width: size,
           height: size,
           borderRadius: 1,
           border: '1px solid rgba(255,255,255,0.3)',
-          backgroundColor: color,
           cursor: 'pointer',
           p: 0,
         }}
@@ -79,6 +85,12 @@ export function StylePanel() {
   const bondsStyle = useStructureStore((s) => s.bondsStyle);
   const setBondsStyle = useStructureStore((s) => s.setBondsStyle);
 
+  // The viewport (Bonds.tsx) and the glb export both size bonds from
+  // visParams.bondRadius, so that is the source of truth the slider drives;
+  // bondsStyle.radius is kept in sync only so the style/scene preset persists it.
+  const bondRadius = useStructureStore((s) => s.visParams.bondRadius);
+  const setVisParams = useStructureStore((s) => s.setVisParams);
+
   const sceneSettings = useStructureStore((s) => s.sceneSettings);
   const setBackground = useStructureStore((s) => s.setBackground);
   const setGlobalBrightness = useStructureStore((s) => s.setGlobalBrightness);
@@ -86,10 +98,14 @@ export function StylePanel() {
   const viewControls = useStructureStore((s) => s.viewControls);
   const setViewControls = useStructureStore((s) => s.setViewControls);
 
+  const atomStyles = useStructureStore((s) => s.atomStyles);
+
   const selectedAtoms = useStructureStore((s) => s.selectedAtoms);
   const colorOverrides = useStructureStore((s) => s.colorOverrides);
   const setColorOverrides = useStructureStore((s) => s.setColorOverrides);
   const setOpacityOverrides = useStructureStore((s) => s.setOpacityOverrides);
+  const radiusOverrides = useStructureStore((s) => s.radiusOverrides);
+  const setRadiusOverrides = useStructureStore((s) => s.setRadiusOverrides);
 
   const symbols = useMemo<string[]>(
     () => structureData?.structure.symbols ?? [],
@@ -140,8 +156,20 @@ export function StylePanel() {
     setColorOverrides({ ...existing, ...fromSelection });
   };
 
+  // Per-atom size override (multiplier) applied to every selected atom. The
+  // renderer multiplies the element radius by this factor (default 1.0).
+  const handleSelectedSize = (size: number) => {
+    const next = { ...(radiusOverrides ?? {}) };
+    selectedAtoms.forEach((idx) => {
+      next[idx] = size;
+    });
+    setRadiusOverrides(next);
+  };
+
+  // Prefer a user override, then the effective CPK colour loaded from
+  // atom.json, and only fall back to the neutral gray when neither exists.
   const elementColor = (sym: string): string =>
-    elements[sym]?.color ?? DEFAULT_ATOM_COLOR;
+    elements[sym]?.color ?? atomStyles?.[sym]?.color ?? DEFAULT_ATOM_COLOR;
 
   const update = (sym: string, patch: ElementStyle) =>
     setElementStyle(sym, patch);
@@ -172,6 +200,7 @@ export function StylePanel() {
                   <ColorSwatch
                     color={elementColor(sym)}
                     onChange={(color) => update(sym, { color })}
+                    testId={`color-${sym}`}
                   />
                 </TableCell>
                 <TableCell sx={{ minWidth: 90 }}>
@@ -228,8 +257,29 @@ export function StylePanel() {
               Color
             </Typography>
             <ColorSwatch
-              color={DEFAULT_ATOM_COLOR}
+              color={
+                colorOverrides?.[selectedAtoms[0]] ??
+                atomStyles?.[symbols[selectedAtoms[0]]]?.color ??
+                DEFAULT_ATOM_COLOR
+              }
               onChange={handleSelectedColor}
+              testId="selected-color"
+            />
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Size
+            </Typography>
+            <Slider
+              size="small"
+              min={0.3}
+              max={2.0}
+              step={0.05}
+              value={radiusOverrides?.[selectedAtoms[0]] ?? 1.0}
+              onChange={(_, v) => handleSelectedSize(v as number)}
+              aria-label="selected-size"
+              slotProps={{ input: { 'data-testid': 'selected-size' } as never }}
+              sx={{ flex: 1 }}
             />
           </Stack>
         </>
@@ -240,15 +290,19 @@ export function StylePanel() {
         Bonds
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        Radius ({bondsStyle.radius.toFixed(2)})
+        Radius ({bondRadius.toFixed(2)})
       </Typography>
       <Slider
         size="small"
         min={0.02}
         max={0.4}
         step={0.01}
-        value={bondsStyle.radius}
-        onChange={(_, v) => setBondsStyle({ radius: v as number })}
+        value={bondRadius}
+        onChange={(_, v) => {
+          const radius = v as number;
+          setVisParams({ bondRadius: radius });
+          setBondsStyle({ radius });
+        }}
         aria-label="bond-radius"
         slotProps={{ input: { 'data-testid': 'bond-radius' } as never }}
       />
@@ -314,6 +368,7 @@ export function StylePanel() {
             perAtomOpacityRef.current = null;
             setColorOverrides(null);
             setOpacityOverrides(null);
+            setRadiusOverrides(null);
           }}
         >
           Reset all styles

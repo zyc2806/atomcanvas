@@ -498,12 +498,13 @@ const SceneContent: React.FC = () => {
     const elements = useStructureStore((state) => state.elements);
     const storeColorOverrides = useStructureStore((state) => state.colorOverrides);
     const storeOpacityOverrides = useStructureStore((state) => state.opacityOverrides);
+    const storeRadiusOverrides = useStructureStore((state) => state.radiusOverrides);
     const showUnitCell = useStructureStore((state) => state.viewControls.showUnitCell);
     const showHBonds = useStructureStore((state) => state.viewControls.showHBonds);
 
     const symbols = structureData?.structure.symbols;
 
-    const { colorOverrides: elColor, opacityOverrides: elOpacity, radiusOverrides } = useMemo(
+    const { colorOverrides: elColor, opacityOverrides: elOpacity, radiusOverrides: elRadius } = useMemo(
         () => elementStylesToAtomOverrides(symbols ?? [], elements),
         [symbols, elements],
     );
@@ -516,6 +517,11 @@ const SceneContent: React.FC = () => {
         () => ({ ...elOpacity, ...(storeOpacityOverrides ?? {}) }),
         [elOpacity, storeOpacityOverrides],
     );
+    // Per-atom selection size overrides win over the per-element radius scale.
+    const mergedRadiusOverrides = useMemo(
+        () => ({ ...elRadius, ...(storeRadiusOverrides ?? {}) }),
+        [elRadius, storeRadiusOverrides],
+    );
 
     if (!structureData) return null;
 
@@ -524,7 +530,7 @@ const SceneContent: React.FC = () => {
             <Atoms
                 colorOverrides={mergedColorOverrides}
                 opacityOverrides={mergedOpacityOverrides}
-                radiusOverrides={radiusOverrides}
+                radiusOverrides={mergedRadiusOverrides}
             />
             <Bonds />
             <AromaticRings />

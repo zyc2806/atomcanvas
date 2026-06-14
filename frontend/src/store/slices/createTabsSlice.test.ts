@@ -25,6 +25,21 @@ describe('tabs slice', () => {
     expect(tabB.bondOverrides).toEqual({ '0-1': 'delete' });
   });
 
+  it('snapshots and restores radiusOverrides per tab without leaking across tabs', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    // Tab B is active; give it a per-atom size override.
+    useStructureStore.getState().setRadiusOverrides({ 0: 1.8 });
+    // Switching to A must snapshot B's sizes into B and NOT leak onto A.
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().radiusOverrides).toBeNull();
+    const tabB = useStructureStore.getState().tabs.find((t) => t.id === b)!;
+    expect(tabB.radiusOverrides).toEqual({ 0: 1.8 });
+    // Switching back to B restores its sizes.
+    useStructureStore.getState().switchTab(b);
+    expect(useStructureStore.getState().radiusOverrides).toEqual({ 0: 1.8 });
+  });
+
   it('closeTab of active tab activates a neighbor', () => {
     const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
     useStructureStore.getState().addTab(fakeDoc('b'), 'b');

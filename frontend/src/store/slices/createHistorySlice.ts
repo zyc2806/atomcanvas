@@ -17,6 +17,7 @@ const createSnapshot = (state: StructureState): HistorySnapshot => ({
     slabTarget: state.slabTarget,
     colorOverrides: state.colorOverrides ? { ...state.colorOverrides } : null,
     opacityOverrides: state.opacityOverrides ? { ...state.opacityOverrides } : null,
+    radiusOverrides: state.radiusOverrides ? { ...state.radiusOverrides } : null,
     atomStyles: state.atomStyles ? { ...state.atomStyles } : null,
 });
 
@@ -57,6 +58,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                 slabTarget: previous.slabTarget,
                 colorOverrides: previous.colorOverrides,
                     opacityOverrides: previous.opacityOverrides,
+                    radiusOverrides: previous.radiusOverrides,
                     atomStyles: previous.atomStyles,
                 };
         });
@@ -95,6 +97,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                 slabTarget: next.slabTarget,
                 colorOverrides: next.colorOverrides,
                     opacityOverrides: next.opacityOverrides,
+                    radiusOverrides: next.radiusOverrides,
                     atomStyles: next.atomStyles,
                 };
         });
@@ -117,6 +120,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
             slabTarget: snapshot?.slabTarget !== undefined ? snapshot.slabTarget : state.slabTarget,
             colorOverrides: snapshot?.colorOverrides !== undefined ? snapshot.colorOverrides : (state.colorOverrides ? { ...state.colorOverrides } : null),
             opacityOverrides: snapshot?.opacityOverrides !== undefined ? snapshot.opacityOverrides : (state.opacityOverrides ? { ...state.opacityOverrides } : null),
+            radiusOverrides: snapshot?.radiusOverrides !== undefined ? snapshot.radiusOverrides : (state.radiusOverrides ? { ...state.radiusOverrides } : null),
             atomStyles: snapshot?.atomStyles !== undefined ? snapshot.atomStyles : (state.atomStyles ? { ...state.atomStyles } : null),
         };
 

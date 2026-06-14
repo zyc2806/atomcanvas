@@ -48,6 +48,7 @@ export const createDataSlice: StateCreator<StructureState, [], [], DataSlice> = 
                     bondOverrides: shouldClearOverrides ? null : state.bondOverrides,
                     clusterIndices: shouldClearOverrides ? null : state.clusterIndices,
                     colorOverrides: shouldClearOverrides ? null : state.colorOverrides,
+                    radiusOverrides: shouldClearOverrides ? null : state.radiusOverrides,
                     slabTarget: shouldClearOverrides ? null : state.slabTarget,
                     selectionMode: shouldClearOverrides ? 'single' : state.selectionMode,
                 });
@@ -67,6 +68,7 @@ export const createDataSlice: StateCreator<StructureState, [], [], DataSlice> = 
                     bondOverrides: shouldClearOverrides ? null : state.bondOverrides,
                     clusterIndices: shouldClearOverrides ? null : state.clusterIndices,
                     colorOverrides: shouldClearOverrides ? null : state.colorOverrides,
+                    radiusOverrides: shouldClearOverrides ? null : state.radiusOverrides,
                     slabTarget: shouldClearOverrides ? null : state.slabTarget,
                     selectionMode: shouldClearOverrides ? 'single' : state.selectionMode,
                 });
@@ -102,6 +104,7 @@ export const createDataSlice: StateCreator<StructureState, [], [], DataSlice> = 
             clusterIndices: null,
             selectionMode: 'single',
             colorOverrides: null,
+            radiusOverrides: null,
             bondOverrides: null,
             slabTarget: null,
         });

@@ -144,6 +144,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     cameraState: null,
     colorOverrides: null,
     opacityOverrides: null,
+    radiusOverrides: null,
     bondOverrides: null,
     bondOpacityOverrides: null,
     selectionMode: 'single',
@@ -229,6 +230,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     setCameraState: (cameraState) => set({ cameraState }),
     setColorOverrides: (overrides) => set({ colorOverrides: overrides }),
     setOpacityOverrides: (overrides) => set({ opacityOverrides: overrides }),
+    setRadiusOverrides: (overrides) => set({ radiusOverrides: overrides }),
     setBondOverride: (bondId, color) => set((state) => {
         const currentOverrides = state.bondOverrides || {};
         if (color === null) {
@@ -403,6 +405,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         selectionMode: mode,
         clusterIndices: mode === 'slab' ? state.clusterIndices : null,
         colorOverrides: mode === 'slab' ? state.colorOverrides : null,
+        radiusOverrides: mode === 'slab' ? state.radiusOverrides : null,
         slabTarget: mode === 'slab' ? state.slabTarget : null,
         cameraViewTrigger: null,
     })),
@@ -474,6 +477,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         selectionMode: 'single',
         colorOverrides: null,
         opacityOverrides: null,
+        radiusOverrides: null,
         bondOverrides: null,
         bondOpacityOverrides: null,
         slabTarget: null,
@@ -490,6 +494,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         slabTarget: null,
         colorOverrides: null,
         opacityOverrides: null,
+        radiusOverrides: null,
         bondOpacityOverrides: null,
         selectionMode: 'single',
     })

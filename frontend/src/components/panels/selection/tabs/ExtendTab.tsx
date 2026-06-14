@@ -31,7 +31,7 @@ const ExtendTab: React.FC<ExtendTabProps> = ({ onSelect, operation = 'replace' }
         return activeTabId ?? null;
     };
 
-    const handleExtendSelection = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleExtendSelection = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData || selectedAtoms.length === 0) return;
         const originStructureId = getLatestActiveTabId();
         setLoading(true);
@@ -44,7 +44,7 @@ const ExtendTab: React.FC<ExtendTabProps> = ({ onSelect, operation = 'replace' }
                 bondOverrides,
                 visParams.bondThreshold
             );
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error(e);
         } finally {

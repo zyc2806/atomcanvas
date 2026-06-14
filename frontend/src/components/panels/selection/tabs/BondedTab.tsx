@@ -30,7 +30,7 @@ const BondedTab: React.FC<BondedTabProps> = ({ onSelect, operation = 'replace' }
         return activeTabId ?? null;
     };
 
-    const handleSelectBonded = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleSelectBonded = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData || selectedAtoms.length === 0) return;
         const originStructureId = getLatestActiveTabId();
         setLoading(true);
@@ -43,7 +43,7 @@ const BondedTab: React.FC<BondedTabProps> = ({ onSelect, operation = 'replace' }
                 bondOverrides,
                 visParams.bondThreshold
             );
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error(e);
         } finally {

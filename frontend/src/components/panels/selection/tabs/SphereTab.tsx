@@ -33,7 +33,7 @@ const SphereTab: React.FC<SphereTabProps> = ({ onSelect, operation = 'replace' }
     const [coords, setCoords] = useState({ x: 0, y: 0, z: 0 });
     const [atomIdx, setAtomIdx] = useState(0);
 
-    const handleSelect = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleSelect = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData) return;
         const originStructureId = getLatestActiveTabId();
         try {
@@ -41,7 +41,7 @@ const SphereTab: React.FC<SphereTabProps> = ({ onSelect, operation = 'replace' }
                 ? `sphere:${coords.x},${coords.y},${coords.z},${radius}`
                 : `sphere:@${atomIdx},${radius}`;
             const data = await selectionService.parseExpression(structureData.structure, expr);
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error(e);
         }

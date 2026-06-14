@@ -30,7 +30,7 @@ const ConnectedTab: React.FC<ConnectedTabProps> = ({ onSelect, operation = 'repl
         return activeTabId ?? null;
     };
 
-    const handleSelectConnected = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleSelectConnected = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData || selectedAtoms.length === 0) return;
         const originStructureId = getLatestActiveTabId();
         setLoading(true);
@@ -42,7 +42,7 @@ const ConnectedTab: React.FC<ConnectedTabProps> = ({ onSelect, operation = 'repl
                 bondOverrides,
                 visParams.bondThreshold
             );
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error(e);
         } finally {

@@ -30,14 +30,14 @@ const SpecialTab: React.FC<SpecialTabProps> = ({ onSelect, operation = 'replace'
         return activeTabId ?? null;
     };
 
-    const handleSelectFixed = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleSelectFixed = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData) return;
         const originStructureId = getLatestActiveTabId();
         setLoading(true);
         try {
             const expr = 'fixed';
             const data = await selectionService.parseExpression(structureData.structure, expr);
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error('Error selecting fixed atoms:', e);
         } finally {

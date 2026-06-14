@@ -33,13 +33,13 @@ const PercentileTab: React.FC<PercentileTabProps> = ({ onSelect, operation = 're
     const [pctMin, setPctMin] = useState(0);
     const [pctMax, setPctMax] = useState(100);
 
-    const handleSelectByPercentile = async (operation: 'replace' | 'add' | 'filter' | 'exclude') => {
+    const handleSelectByPercentile = async (op: 'replace' | 'add' | 'filter' | 'exclude') => {
         if (!structureData) return;
         const originStructureId = getLatestActiveTabId();
         try {
             const expr = `pct:${pctAxis},${pctMin},${pctMax}`;
             const data = await selectionService.parseExpression(structureData.structure, expr);
-            onSelect(data.indices, operation, expr, originStructureId);
+            onSelect(data.indices, op, expr, originStructureId);
         } catch (e) {
             console.error(e);
         }

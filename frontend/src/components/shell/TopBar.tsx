@@ -3,6 +3,7 @@ import { AppBar, Toolbar, Button, IconButton, Box, Tooltip } from '@mui/material
 import PaletteIcon from '@mui/icons-material/Palette';
 import LinkIcon from '@mui/icons-material/Link';
 import TuneIcon from '@mui/icons-material/Tune';
+import HighlightAltIcon from '@mui/icons-material/HighlightAlt';
 import { StructureTabs } from './StructureTabs';
 import { ExportMenu } from './ExportMenu';
 import type { ActivePanel } from './PanelHost';
@@ -67,6 +68,16 @@ export function TopBar({ activePanel, onTogglePanel, onOpenFiles }: TopBarProps)
             aria-label="toggle scene panel"
           >
             <TuneIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Selection (a)">
+          <IconButton
+            size="small"
+            color={activePanel === 'selection' ? 'primary' : 'default'}
+            onClick={() => onTogglePanel('selection')}
+            aria-label="toggle selection panel"
+          >
+            <HighlightAltIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 

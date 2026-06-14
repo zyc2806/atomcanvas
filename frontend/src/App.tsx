@@ -11,6 +11,7 @@ const PANEL_KEYS: Record<string, Exclude<ActivePanel, null>> = {
   s: 'style',
   b: 'bonds',
   c: 'scene',
+  a: 'selection',
 };
 
 function isEditableTarget(target: EventTarget | null): boolean {

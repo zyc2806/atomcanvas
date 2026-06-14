@@ -17,7 +17,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useStructureStore } from '../../store/useStructureStore';
 import { refreshTopology } from '../../services/topologyRefresh';
-import { SelectionInput } from './SelectionInput';
 
 // Bond-order overrides understood by the backend (besides the special "delete").
 const BOND_ORDERS = ['1.0', '1.5', '2.0', '3.0'] as const;
@@ -62,8 +61,6 @@ export function BondEditPanel() {
       <Typography variant="subtitle1" gutterBottom>
         Bonds
       </Typography>
-
-      <SelectionInput />
 
       <Divider sx={{ my: 2 }} />
 

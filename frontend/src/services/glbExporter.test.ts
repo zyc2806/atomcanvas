@@ -243,6 +243,47 @@ describe('glbExporter aromatic-ring fidelity', () => {
   });
 });
 
+// --- Unit cell: "Show unit cell" must reach the glb (issue #4) ---------------
+// The viewport draws the 3x3 cell as 12 edges (UnitCell.tsx). The glb export
+// must emit those edges as thin cylinders (glTF cannot serialize THREE.Line),
+// gated on the live `showUnitCell` view control.
+
+describe('glbExporter unit cell', () => {
+  const cell = [
+    [3, 0, 0],
+    [0, 3, 0],
+    [0, 0, 3],
+  ];
+
+  it('exports a unitcell node when a cell is present and showUnitCell is on', () => {
+    const scene = buildExportScene({ ...cc, cell }, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: true,
+    });
+    const node = scene.getObjectByName('unitcell');
+    expect(node).toBeDefined();
+    // Edges are real meshes (cylinders), not THREE.Line, so they round-trip.
+    let meshes = 0;
+    node!.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes += 1;
+    });
+    expect(meshes).toBeGreaterThan(0);
+  });
+
+  it('omits the unitcell node when showUnitCell is off', () => {
+    const scene = buildExportScene({ ...cc, cell }, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: false,
+    });
+    expect(scene.getObjectByName('unitcell')).toBeUndefined();
+  });
+
+  it('omits the unitcell node when there is no cell (non-periodic molecule)', () => {
+    const scene = buildExportScene(cc, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: true,
+    });
+    expect(scene.getObjectByName('unitcell')).toBeUndefined();
+  });
+});
+
 describe('glbExporter robustness', () => {
   it('skips bonds whose atom positions are non-finite (mirrors the viewport guard)', () => {
     const broken = { symbols: ['C', 'C'], positions: [[0, 0, 0], [NaN, 0, 0]] };

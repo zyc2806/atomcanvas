@@ -32,9 +32,11 @@ import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/stor
  * `renderStyle` is baked into material roughness (standard 0.3 vs soft 1.0); the
  * cartoon/wireframe looks cannot round-trip to glb and fall back to solid meshes.
  *
- * Intentionally NOT exported (the glb captures the molecule's solid geometry, not
- * the full annotated scene): PBC-wrapped ghost bonds, hydrogen bonds (dashed), and
- * the unit cell. PNG export is a literal canvas snapshot and does keep all of
+ * The unit cell is exported (as 12 thin-cylinder edges under a `unitcell` node)
+ * when the live `showUnitCell` view control is on and the structure carries a
+ * cell. Intentionally NOT exported (the glb captures the molecule's solid
+ * geometry, not the full annotated scene): PBC-wrapped ghost bonds and hydrogen
+ * bonds (dashed). PNG export is a literal canvas snapshot and does keep all of
  * those. Note: glTF transparency (alphaMode BLEND) may not render in every
  * downstream viewer (e.g. PowerPoint's 3D model viewer).
  *
@@ -49,6 +51,7 @@ interface ElementData {
 interface MinimalStructure {
     symbols: string[];
     positions: number[][];
+    cell?: number[][];
 }
 interface MinimalVis {
     bonds: [number, number, number][];
@@ -71,6 +74,9 @@ export interface ExportOverrides {
     radiusOverrides?: { [i: number]: number };
     bondOpacityOverrides?: { [bondId: string]: number };
     renderStyle?: RenderStyle;
+    // Mirrors the live `showUnitCell` view control. When true (and a cell is
+    // present) the 3x3 cell is exported as 12 thin-cylinder edges.
+    showUnitCell?: boolean;
 }
 
 const bondIdFor = (i: number, j: number): string => `${Math.min(i, j)}-${Math.max(i, j)}`;
@@ -85,6 +91,10 @@ const CYL_SEGMENTS = 16;
 const TORUS_TUBULAR_SEGMENTS = 64;
 const TORUS_RADIAL_SEGMENTS = 16;
 const FALLBACK_RADII = 0.5;
+// Unit-cell edges are drawn as thin black cylinders (glTF cannot serialize
+// THREE.Line, and WebGL ignores Line `linewidth`).
+const UNIT_CELL_EDGE_RADIUS = 0.02;
+const UNIT_CELL_COLOR: [number, number, number] = [0, 0, 0];
 // Unknown-element fallback. Matches the viewport's getAtomBaseColor fallback
 // (#ff1493) in src/hooks/useAtomColors.ts so an exotic symbol exports the same
 // color it renders on screen.
@@ -262,7 +272,75 @@ export function buildExportScene(
     const ringsGroup = buildRings(structure, vis, colorForAtom, style.bondsStyle.radius);
     if (ringsGroup) scene.add(ringsGroup);
 
+    // --- Unit cell: 12 edge cylinders under a `unitcell` node, gated on the
+    //     live showUnitCell view control (only when a cell is present) ---
+    if (overrides.showUnitCell) {
+        const cellGroup = buildUnitCell(structure.cell);
+        if (cellGroup) scene.add(cellGroup);
+    }
+
     return scene;
+}
+
+/**
+ * Build the unit-cell wireframe as 12 thin black cylinder edges. Mirrors the
+ * vertex layout of UnitCell.tsx but emits cylinders rather than a THREE.Line so
+ * the edges survive the glTF export (and have visible width, unlike Line
+ * `linewidth`). Returns null for a missing/degenerate cell.
+ */
+function buildUnitCell(cell: number[][] | undefined): THREE.Object3D | null {
+    if (!cell || !Array.isArray(cell) || cell.length !== 3) return null;
+    if (!cell.every((row) => Array.isArray(row) && row.length >= 3 && row.every(Number.isFinite))) {
+        return null;
+    }
+
+    const origin = new THREE.Vector3(0, 0, 0);
+    const a = new THREE.Vector3(cell[0][0], cell[0][1], cell[0][2]);
+    const b = new THREE.Vector3(cell[1][0], cell[1][1], cell[1][2]);
+    const c = new THREE.Vector3(cell[2][0], cell[2][1], cell[2][2]);
+    const v000 = origin.clone();
+    const v100 = a.clone();
+    const v010 = b.clone();
+    const v001 = c.clone();
+    const v110 = a.clone().add(b);
+    const v101 = a.clone().add(c);
+    const v011 = b.clone().add(c);
+    const v111 = a.clone().add(b).add(c);
+    const edges: [THREE.Vector3, THREE.Vector3][] = [
+        [v000, v100], [v000, v010], [v000, v001],
+        [v100, v110], [v100, v101],
+        [v010, v110], [v010, v011],
+        [v001, v101], [v001, v011],
+        [v110, v111], [v101, v111], [v011, v111],
+    ];
+
+    const cylAxis = new THREE.Vector3(0, 1, 0);
+    const geoms: THREE.BufferGeometry[] = [];
+    for (const [p, q] of edges) {
+        const dir = q.clone().sub(p);
+        const len = dir.length();
+        if (len < 1e-6) continue;
+        const g = new THREE.CylinderGeometry(UNIT_CELL_EDGE_RADIUS, UNIT_CELL_EDGE_RADIUS, len, CYL_SEGMENTS);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(cylAxis, dir.clone().normalize()));
+        const mid = p.clone().add(q).multiplyScalar(0.5);
+        g.translate(mid.x, mid.y, mid.z);
+        geoms.push(g);
+    }
+    if (geoms.length === 0) return null;
+
+    const group = new THREE.Group();
+    group.name = 'unitcell';
+    group.add(
+        new THREE.Mesh(
+            mergeGeometries(geoms),
+            new THREE.MeshStandardMaterial({
+                color: new THREE.Color(...UNIT_CELL_COLOR),
+                roughness: 1.0,
+                metalness: 0.0,
+            }),
+        ),
+    );
+    return group;
 }
 
 /**

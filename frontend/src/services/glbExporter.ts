@@ -6,6 +6,7 @@ import { getAtomicNumber } from '../utils/chemistry';
 import { getBondRadiusScale } from '../utils/bondUtils';
 import { getNearestAtomIndexToRing } from '../components/r3f/aromaticRingsUtils';
 import { resolveBondHalfOpacity, isOpacityTransparent } from '../components/r3f/materials/opacityPolicy';
+import { ringTubeRadius } from '../utils/ringGeometry';
 import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/store';
 
 /**
@@ -258,7 +259,7 @@ export function buildExportScene(
     if (bondsGroup) scene.add(bondsGroup);
 
     // --- Aromatic rings: a torus per ring under a single `rings` node ---
-    const ringsGroup = buildRings(structure, vis, colorForAtom);
+    const ringsGroup = buildRings(structure, vis, colorForAtom, style.bondsStyle.radius);
     if (ringsGroup) scene.add(ringsGroup);
 
     return scene;
@@ -428,19 +429,23 @@ function buildBonds(
 
 /**
  * Build the aromatic-ring tori. Mirrors AromaticRings.tsx: a base
- * TorusGeometry(1.0, 0.1) scaled uniformly by `radius * 0.6`, oriented from +Z
+ * TorusGeometry(1.0, tube) scaled uniformly by `radius * 0.6`, oriented from +Z
  * to the ring normal, translated to the ring center, and colored by the atom
- * nearest the ring center.
+ * nearest the ring center. The tube radius follows the bond radius via the shared
+ * `ringTubeRadius` helper so the donut thickens with the Radius slider, exactly
+ * like the bonds (and like the viewport).
  */
 function buildRings(
     structure: MinimalStructure,
     vis: MinimalVis,
     colorForAtom: (i: number, sym: string) => [number, number, number],
+    bondRadius: number,
 ): THREE.Object3D | null {
     const rings = vis.rings;
     if (!rings || rings.length === 0) return null;
 
     const defaultNormal = new THREE.Vector3(0, 0, 1);
+    const tube = ringTubeRadius(bondRadius);
     const positions: [number, number, number][] = structure.positions
         .filter((p) => p.length >= 3)
         .map((p) => [p[0], p[1], p[2]]);
@@ -450,7 +455,7 @@ function buildRings(
     for (const [center, normal, radius] of rings) {
         if (center.length < 3 || normal.length < 3) continue;
         const s = radius * 0.6;
-        const g = new THREE.TorusGeometry(1.0, 0.1, TORUS_RADIAL_SEGMENTS, TORUS_TUBULAR_SEGMENTS);
+        const g = new THREE.TorusGeometry(1.0, tube, TORUS_RADIAL_SEGMENTS, TORUS_TUBULAR_SEGMENTS);
         g.scale(s, s, s);
         const ringNormal = new THREE.Vector3(normal[0], normal[1], normal[2]).normalize();
         g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(defaultNormal, ringNormal));

@@ -158,6 +158,19 @@ function bondsBoundingBox(scene: THREE.Scene): THREE.Box3 {
   return box;
 }
 
+function ringsBoundingBox(scene: THREE.Scene): THREE.Box3 {
+  const rings = scene.getObjectByName('rings')!;
+  const box = new THREE.Box3();
+  rings.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) {
+      m.geometry.computeBoundingBox();
+      box.union(m.geometry.boundingBox!);
+    }
+  });
+  return box;
+}
+
 describe('glbExporter bond-order fidelity', () => {
   const order = (o: number) =>
     buildExportScene(cc, { bonds: [[0, 1, o]] }, uniformStyle, ccData);
@@ -206,6 +219,27 @@ describe('glbExporter aromatic-ring fidelity', () => {
       colorOverrides: { 0: '#abcdef' },
     });
     expect(meshByColor(scene, 'rings', 'abcdef')).toBeDefined();
+  });
+
+  it('scales the ring torus tube with the bond radius (Radius slider)', () => {
+    const sceneWith = (radius: number) =>
+      buildExportScene(
+        cc,
+        { bonds: [[0, 1, 1]], rings: [ring] },
+        { elements: {}, bondsStyle: { ...uniformStyle.bondsStyle, radius } },
+        ccData,
+      );
+    // The ring normal is +Z, so the torus lies in the XY plane and its z-extent
+    // equals twice the (scaled) tube radius. Doubling the bond radius must
+    // double the tube.
+    const tubeZ = (scene: THREE.Scene) => {
+      const b = ringsBoundingBox(scene);
+      return b.max.z - b.min.z;
+    };
+    const thin = tubeZ(sceneWith(0.08));
+    const thick = tubeZ(sceneWith(0.16));
+    expect(thin).toBeGreaterThan(0);
+    expect(thick).toBeCloseTo(2 * thin, 4);
   });
 });
 

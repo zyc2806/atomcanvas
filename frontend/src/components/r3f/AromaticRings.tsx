@@ -7,6 +7,7 @@ import useAtomColors from '../../hooks/useAtomColors';
 import './materials/ToonHighlightMaterial';
 
 import { getNearestAtomIndexToRing } from './aromaticRingsUtils';
+import { ringTubeRadius } from '../../utils/ringGeometry';
 
 interface AromaticRingsProps {
     structure?: StandardStructureObject;
@@ -25,7 +26,10 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
     const { getAtomColor, getAtomBaseColor } = useAtomColors();
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const { showBonds, showShadows } = viewControls;
-    const { renderStyle, cartoonParams } = visParams;
+    const { renderStyle, cartoonParams, bondRadius } = visParams;
+    // Aromatic torus tube tracks the bond radius (shared with the glb exporter),
+    // so the Radius slider thickens the ring "donut" alongside the bonds.
+    const ringTube = ringTubeRadius(bondRadius);
 
     const activeStructure = structure || structureData;
 
@@ -117,7 +121,7 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
                         quaternion={ring.quaternion}
                         scale={[ring.scale.x, ring.scale.y, ring.scale.z]}
                     >
-                        <torusGeometry args={[1.0, 0.1, 16, 64]} />
+                        <torusGeometry args={[1.0, ringTube, 16, 64]} />
                         <toonHighlightMaterial
                             uColor={ring.color}
                             uLightDir={toonLightDir}
@@ -140,7 +144,7 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
             castShadow={shouldCastShadow}
             receiveShadow={shouldCastShadow}
         >
-            <torusGeometry args={[1.0, 0.1, 16, 64]} />
+            <torusGeometry args={[1.0, ringTube, 16, 64]} />
             <meshStandardMaterial roughness={renderStyle === 'standard' ? 0.3 : 1} />
             {renderStyle === 'standard' && <Outlines thickness={1} color="black" />}
         </instancedMesh>

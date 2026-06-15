@@ -37,8 +37,9 @@ function docForTab(tabId: string): StandardStructureObject {
 function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
   const renderStyle = s.visParams.renderStyle;
   // showUnitCell is a global view control (like renderStyle), so it applies to
-  // every tab's export.
+  // every tab's export. outlineThickness is the global cartoon outline width.
   const showUnitCell = s.viewControls.showUnitCell;
+  const outlineThickness = s.visParams.cartoonParams.outlineThickness;
   if (!tabId || tabId === s.activeTabId) {
     return {
       colorOverrides: s.perAtomColorOverrides ?? {},
@@ -47,6 +48,7 @@ function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
       bondOpacityOverrides: s.bondOpacityOverrides ?? {},
       renderStyle,
       showUnitCell,
+      outlineThickness,
     };
   }
   const tab = s.tabs.find((t) => t.id === tabId);
@@ -57,6 +59,7 @@ function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
     bondOpacityOverrides: {},
     renderStyle,
     showUnitCell,
+    outlineThickness,
   };
 }
 

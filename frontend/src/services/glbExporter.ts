@@ -29,8 +29,16 @@ import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/stor
  * opacity, and the render style. Atoms/bonds are bucketed by (color, opacity) so
  * per-atom styling survives the merge; each bond half is colored by its endpoint
  * atom (the viewport always element-splits, regardless of bondsStyle.colorMode).
- * `renderStyle` is baked into material roughness (standard 0.3 vs soft 1.0); the
- * cartoon/wireframe looks cannot round-trip to glb and fall back to solid meshes.
+ * `renderStyle` is baked per style (see materialForRenderStyle): standard =
+ * glossy (roughness 0.3) + a black inverted-hull outline; soft = matte
+ * (roughness 1.0), no outline; cartoon = matte + an emissive base (so the flat
+ * toon body survives without scene lights) + a thicker outline. The outline is a
+ * BackSide inflated hull baked only for opaque buckets (transparent atoms skip
+ * it, matching the live standard view). These are APPROXIMATIONS — the following
+ * live looks CANNOT round-trip to a static glTF: soft shadows, screen-space AO,
+ * the cartoon 3-band toon banding, the cartoon view-dependent white highlight,
+ * and the pixel-constant / perspective-corrected outline width (the baked
+ * outline is a fixed world-space offset instead). Wireframe is not represented.
  *
  * The unit cell is exported (as 12 thin-cylinder edges under a `unitcell` node)
  * when the live `showUnitCell` view control is on and the structure carries a
@@ -77,12 +85,101 @@ export interface ExportOverrides {
     // Mirrors the live `showUnitCell` view control. When true (and a cell is
     // present) the 3x3 cell is exported as 12 thin-cylinder edges.
     showUnitCell?: boolean;
+    // Cartoon outline thickness (cartoonParams.outlineThickness); scales the
+    // baked inverted-hull offset for the cartoon style.
+    outlineThickness?: number;
 }
 
 const bondIdFor = (i: number, j: number): string => `${Math.min(i, j)}-${Math.max(i, j)}`;
 
-const roughnessForRenderStyle = (renderStyle: RenderStyle | undefined): number =>
-    renderStyle === 'standard' ? 0.3 : 1.0;
+// World-space outline offset per unit of outline "thickness". The live outline
+// is pixel-constant / perspective-corrected and CANNOT round-trip to a static
+// glTF, so this is an approximation: a thin black inverted hull a fixed world
+// distance outside the surface.
+const OUTLINE_WORLD_OFFSET = 0.012;
+
+/** Per-render-style material recipe baked into the glb (issue #7). */
+interface RenderStyleMaterial {
+    roughness: number;
+    /** Base color is multiplied by this and baked into `emissive` (0 = none). */
+    emissiveFactor: number;
+    /** World-space inverted-hull outline offset; 0 = no outline. */
+    outlineOffset: number;
+}
+
+/**
+ * Translate the live render style into a baked material recipe. The live looks
+ * cannot fully round-trip to glTF, so each style is approximated:
+ *  - standard: glossy (low roughness) + black inverted-hull outline
+ *  - cartoon : flat (high roughness) + emissive base (so the toon body survives
+ *              without scene lights) + a thicker outline (cartoonParams)
+ *  - soft    : flat, no outline (matte, lit by the environment)
+ * An undefined style (direct callers / older tests) is treated as plain matte
+ * with no outline, preserving the previous default.
+ */
+function materialForRenderStyle(
+    renderStyle: RenderStyle | undefined,
+    outlineThickness = 1,
+): RenderStyleMaterial {
+    switch (renderStyle) {
+        case 'standard':
+            return { roughness: 0.3, emissiveFactor: 0, outlineOffset: OUTLINE_WORLD_OFFSET };
+        case 'cartoon':
+            return {
+                roughness: 1.0,
+                emissiveFactor: 0.3,
+                outlineOffset: OUTLINE_WORLD_OFFSET * outlineThickness,
+            };
+        case 'soft':
+            return { roughness: 1.0, emissiveFactor: 0, outlineOffset: 0 };
+        default:
+            return { roughness: 1.0, emissiveFactor: 0, outlineOffset: 0 };
+    }
+}
+
+/** MeshStandardMaterial for a bucket, baking the render-style roughness/emissive
+ * (and optional transparency). */
+function bucketMaterial(
+    color: [number, number, number],
+    mat: RenderStyleMaterial,
+    opacity?: number,
+): THREE.MeshStandardMaterial {
+    const c = new THREE.Color(...color);
+    const params: THREE.MeshStandardMaterialParameters = {
+        color: c,
+        roughness: mat.roughness,
+        metalness: 0.0,
+    };
+    if (mat.emissiveFactor > 0) {
+        params.emissive = c.clone().multiplyScalar(mat.emissiveFactor);
+    }
+    if (opacity !== undefined) {
+        params.transparent = isOpacityTransparent(opacity);
+        params.opacity = opacity;
+    }
+    return new THREE.MeshStandardMaterial(params);
+}
+
+/** Black inverted-hull outline: the bucket geometry inflated along its normals,
+ * drawn BackSide so only the silhouette shows. Plain glTF that round-trips. */
+function makeOutlineMesh(geometry: THREE.BufferGeometry, offset: number): THREE.Mesh {
+    const g = geometry.clone();
+    if (!g.getAttribute('normal')) g.computeVertexNormals();
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const nor = g.getAttribute('normal') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+        pos.setXYZ(
+            i,
+            pos.getX(i) + nor.getX(i) * offset,
+            pos.getY(i) + nor.getY(i) * offset,
+            pos.getZ(i) + nor.getZ(i) * offset,
+        );
+    }
+    pos.needsUpdate = true;
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }));
+    mesh.name = 'outline';
+    return mesh;
+}
 
 type AtomStyleMap = { [symbol: string]: { color: string; radius: number } };
 
@@ -127,21 +224,17 @@ function colorBuckets() {
 function mergeBuckets(
     buckets: Map<string, { color: [number, number, number]; geoms: THREE.BufferGeometry[] }>,
     name: string,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     if (buckets.size === 0) return null;
     const group = new THREE.Group();
     group.name = name;
     for (const { color, geoms } of buckets.values()) {
-        const mesh = new THREE.Mesh(
-            mergeGeometries(geoms),
-            new THREE.MeshStandardMaterial({
-                color: new THREE.Color(...color),
-                roughness,
-                metalness: 0.0,
-            }),
-        );
-        group.add(mesh);
+        const merged = mergeGeometries(geoms);
+        group.add(new THREE.Mesh(merged, bucketMaterial(color, mat)));
+        if (mat.outlineOffset > 0) {
+            group.add(makeOutlineMesh(merged, mat.outlineOffset));
+        }
     }
     return group;
 }
@@ -172,24 +265,20 @@ function styleBuckets() {
 function mergeStyleBuckets(
     buckets: Map<string, StyleBucket>,
     name: string,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     if (buckets.size === 0) return null;
     const group = new THREE.Group();
     group.name = name;
     for (const { color, opacity, geoms } of buckets.values()) {
-        const transparent = isOpacityTransparent(opacity);
-        const mesh = new THREE.Mesh(
-            mergeGeometries(geoms),
-            new THREE.MeshStandardMaterial({
-                color: new THREE.Color(...color),
-                roughness,
-                metalness: 0.0,
-                transparent,
-                opacity,
-            }),
-        );
-        group.add(mesh);
+        const merged = mergeGeometries(geoms);
+        group.add(new THREE.Mesh(merged, bucketMaterial(color, mat, opacity)));
+        // Inverted-hull outline only for opaque buckets — the live standard
+        // outline is skipped for transparent atoms (Atoms.tsx), and an outline
+        // around a glass sphere would read as a hard black ring.
+        if (mat.outlineOffset > 0 && !isOpacityTransparent(opacity)) {
+            group.add(makeOutlineMesh(merged, mat.outlineOffset));
+        }
     }
     return group;
 }
@@ -227,7 +316,7 @@ export function buildExportScene(
     overrides: ExportOverrides = {},
 ): THREE.Scene {
     const scene = new THREE.Scene();
-    const roughness = roughnessForRenderStyle(overrides.renderStyle);
+    const mat = materialForRenderStyle(overrides.renderStyle, overrides.outlineThickness);
 
     // Per-atom style resolvers mirroring the live viewport (Atoms.tsx): a
     // per-atom override (selection color/size/opacity) wins, otherwise the
@@ -261,15 +350,15 @@ export function buildExportScene(
         g.translate(structure.positions[i][0], structure.positions[i][1], structure.positions[i][2]);
         addAtom(colorForAtom(i, sym), opacityForAtom(i, sym), g);
     });
-    const atomsGroup = mergeStyleBuckets(atomBuckets, 'atoms', roughness);
+    const atomsGroup = mergeStyleBuckets(atomBuckets, 'atoms', mat);
     if (atomsGroup) scene.add(atomsGroup);
 
     // --- Bonds: cylinders (1/2/3 per bond by order) under a single `bonds` node ---
-    const bondsGroup = buildBonds(structure, vis, style, colorForAtom, opacityForAtom, overrides, roughness);
+    const bondsGroup = buildBonds(structure, vis, style, colorForAtom, opacityForAtom, overrides, mat);
     if (bondsGroup) scene.add(bondsGroup);
 
     // --- Aromatic rings: a torus per ring under a single `rings` node ---
-    const ringsGroup = buildRings(structure, vis, colorForAtom, style.bondsStyle.radius);
+    const ringsGroup = buildRings(structure, vis, colorForAtom, style.bondsStyle.radius, mat);
     if (ringsGroup) scene.add(ringsGroup);
 
     // --- Unit cell: 12 edge cylinders under a `unitcell` node, gated on the
@@ -404,7 +493,7 @@ function buildBonds(
     colorForAtom: (i: number, sym: string) => [number, number, number],
     opacityForAtom: (i: number, sym: string) => number,
     overrides: ExportOverrides,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     const { radius } = style.bondsStyle;
     const cylAxis = new THREE.Vector3(0, 1, 0);
@@ -502,7 +591,7 @@ function buildBonds(
         }
     }
 
-    return mergeStyleBuckets(buckets, 'bonds', roughness);
+    return mergeStyleBuckets(buckets, 'bonds', mat);
 }
 
 /**
@@ -518,6 +607,7 @@ function buildRings(
     vis: MinimalVis,
     colorForAtom: (i: number, sym: string) => [number, number, number],
     bondRadius: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     const rings = vis.rings;
     if (!rings || rings.length === 0) return null;
@@ -544,7 +634,7 @@ function buildRings(
         add(color, g);
     }
 
-    return mergeBuckets(buckets, 'rings', 0.45);
+    return mergeBuckets(buckets, 'rings', mat);
 }
 
 export async function exportGlb(scene: THREE.Scene): Promise<ArrayBuffer> {

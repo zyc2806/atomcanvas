@@ -25,6 +25,13 @@ function meshByColor(scene: THREE.Scene, group: string, hex: string): THREE.Mesh
     (m) => (m.material as THREE.MeshStandardMaterial).color.getHexString() === hex,
   );
 }
+// Baked inverted-hull outline meshes: black MeshBasicMaterial rendered BackSide.
+function outlineMeshes(scene: THREE.Scene, group: string): THREE.Mesh[] {
+  return meshesInGroup(scene, group).filter((m) => {
+    const mat = m.material as THREE.Material;
+    return mat instanceof THREE.MeshBasicMaterial && mat.side === THREE.BackSide;
+  });
+}
 function boundingSphereRadius(mesh: THREE.Mesh): number {
   mesh.geometry.computeBoundingSphere();
   return mesh.geometry.boundingSphere!.radius;
@@ -101,6 +108,55 @@ describe('glbExporter', () => {
     )!;
     expect((stdMesh.material as THREE.MeshStandardMaterial).roughness).toBeCloseTo(0.3, 5);
     expect((softMesh.material as THREE.MeshStandardMaterial).roughness).toBeCloseTo(1.0, 5);
+  });
+
+  it('bakes a nonzero emissive into cartoon materials (flat toon base survives without lights)', () => {
+    const oMesh = meshByColor(
+      buildExportScene(structure, vis, style, elementData, { renderStyle: 'cartoon' }),
+      'atoms',
+      'ff0000',
+    )!;
+    const mat = oMesh.material as THREE.MeshStandardMaterial;
+    expect(mat.emissive.getHex()).not.toBe(0x000000);
+  });
+
+  it('keeps the emissive black for standard and soft', () => {
+    for (const renderStyle of ['standard', 'soft'] as const) {
+      const oMesh = meshByColor(
+        buildExportScene(structure, vis, style, elementData, { renderStyle }),
+        'atoms',
+        'ff0000',
+      )!;
+      expect((oMesh.material as THREE.MeshStandardMaterial).emissive.getHex()).toBe(0x000000);
+    }
+  });
+
+  it('bakes a BackSide outline for standard and cartoon, but not soft', () => {
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }), 'atoms').length,
+    ).toBeGreaterThan(0);
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'cartoon' }), 'atoms').length,
+    ).toBeGreaterThan(0);
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'soft' }), 'atoms').length,
+    ).toBe(0);
+  });
+
+  it('skips the baked outline for transparent atoms (matches the live standard)', () => {
+    const opaque = outlineMeshes(
+      buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }),
+      'atoms',
+    ).length;
+    const withTransparent = outlineMeshes(
+      buildExportScene(structure, vis, style, elementData, {
+        renderStyle: 'standard',
+        opacityOverrides: { 0: 0.3 },
+      }),
+      'atoms',
+    ).length;
+    // Making one of the two element buckets transparent drops exactly its outline.
+    expect(withTransparent).toBe(opaque - 1);
   });
 
   it('getElementData builds element data from atomStyles + radii formula', () => {
@@ -219,6 +275,21 @@ describe('glbExporter aromatic-ring fidelity', () => {
       colorOverrides: { 0: '#abcdef' },
     });
     expect(meshByColor(scene, 'rings', 'abcdef')).toBeDefined();
+  });
+
+  it('honors the render style on ring materials (roughness + outline)', () => {
+    const ringScene = (renderStyle: 'standard' | 'soft' | 'cartoon') =>
+      buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [ring] }, uniformStyle, ccData, { renderStyle });
+    const ringMat = (scene: THREE.Scene) =>
+      meshesInGroup(scene, 'rings').find(
+        (m) => (m.material as THREE.MeshStandardMaterial).isMeshStandardMaterial,
+      )!.material as THREE.MeshStandardMaterial;
+    expect(ringMat(ringScene('standard')).roughness).toBeCloseTo(0.3, 5);
+    expect(ringMat(ringScene('soft')).roughness).toBeCloseTo(1.0, 5);
+    // standard + cartoon get the inverted-hull outline; soft does not.
+    expect(outlineMeshes(ringScene('standard'), 'rings').length).toBeGreaterThan(0);
+    expect(outlineMeshes(ringScene('cartoon'), 'rings').length).toBeGreaterThan(0);
+    expect(outlineMeshes(ringScene('soft'), 'rings').length).toBe(0);
   });
 
   it('scales the ring torus tube with the bond radius (Radius slider)', () => {

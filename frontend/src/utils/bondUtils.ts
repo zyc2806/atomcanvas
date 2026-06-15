@@ -53,10 +53,14 @@ const WIREFRAME_HIT_SCALE = 0.3;
 export const getRenderedAtomRadius = (
     elementRadius: number,
     atomScale: number,
-    displayMode: 'ball-stick' | 'vdw' | 'wireframe'
+    displayMode: 'ball-stick' | 'vdw' | 'wireframe',
+    // Per-atom / per-element radius override (e.g. the Size slider). Must be
+    // folded into the rendered radius so bonds trim to the *shrunken* atom
+    // surface; otherwise the cylinder floats with a visible gap (issue #1).
+    radiusOverride = 1
 ): number => {
     const modeScale = displayMode === 'wireframe' ? WIREFRAME_HIT_SCALE : 1;
-    return elementRadius * atomScale * modeScale;
+    return elementRadius * radiusOverride * atomScale * modeScale;
 };
 
 export const getBondSurfaceTrim = (

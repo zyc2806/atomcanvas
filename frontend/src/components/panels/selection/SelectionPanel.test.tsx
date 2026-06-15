@@ -14,6 +14,15 @@ describe('SelectionPanel', () => {
     useStructureStore.getState().clearNotification?.();
   });
 
+  it('constrains the panel to the shared 340px drawer width and pads like the other panels', () => {
+    // Every other drawer panel pins its root Box to `{ p: 2, width: 340 }`
+    // (StylePanel, ScenePanel, BondEditPanel). Without the width the persistent
+    // Drawer shrink-wraps to SelectionPanel's widest intrinsic content; without
+    // the padding its content sits flush to the drawer edges, unlike the others.
+    const { container } = render(<SelectionPanel />);
+    expect(container.firstChild).toHaveStyle({ width: '340px', padding: '16px' });
+  });
+
   it('shows the live selected-atom count', () => {
     useStructureStore.getState().updateSelection([0, 2], 'replace');
     render(<SelectionPanel />);

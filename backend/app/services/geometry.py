@@ -554,6 +554,42 @@ def _record_bond_diagnostics(
         summary[summary_key] = int(summary.get(summary_key, 0)) + 1
 
 
+def _is_aromatic_ring(atoms, ring, arom_detector, planarity_tol: float = 0.1) -> bool:
+    """
+    Decide whether a candidate ring is aromatic, for the heuristic fallback path
+    (RDKit unavailable). Uses the textbook aromaticity criterion that survives an
+    imperfect Kekulé: the ring must be (near-)planar AND every ring atom must be
+    sp2 / contribute a p-orbital to a continuous pi system:
+
+    - C / N / B: must be sp2 (planar, low coordination) — ``is_sp2_atom``.
+    - O / S:     a 2-coordinate lone-pair donor (furan O, thiophene S).
+
+    A bond-order count is deliberately avoided here: the Kekulé fallback often
+    under-kekulizes benzene (2 inferred double bonds instead of 3), so a "count
+    the double bonds" test would drop real aromatics. The sp2 test instead
+    cleanly rejects the sp3 carbons of cyclohexane, cyclohexene and 1,n-dienes,
+    and the planarity test rejects puckered saturated rings even when hydrogens
+    are absent.
+    """
+    from app.services.heuristics import is_planar_ring
+
+    if not is_planar_ring(atoms.positions, ring, tol=planarity_tol):
+        return False
+
+    symbols = atoms.get_chemical_symbols()
+    for idx in ring:
+        sym = symbols[idx]
+        if sym in ("C", "N", "B"):
+            if not arom_detector.is_sp2_atom(idx):
+                return False
+        elif sym in ("O", "S"):
+            if len(arom_detector.adj[idx]) != 2:
+                return False
+        else:
+            return False
+    return True
+
+
 def infer_bond_orders(
     atoms: Atoms,
     bonds: List[Any],
@@ -660,13 +696,21 @@ def infer_bond_orders(
                     used_heuristic_fallback = True
 
                 # Fallback aromatic ring detection
-                from app.services.heuristics import SpecialStructureDetector
+                from app.services.heuristics import (
+                    EnhancedAromaticityDetector,
+                    SpecialStructureDetector,
+                )
 
                 sd = SpecialStructureDetector(atoms, c_bonds)
                 basis_rings = sd.detect_small_rings(max_size=6)
+                # Geometric sp2 detector used to qualify each candidate ring;
+                # rings are only marked aromatic when planar and fully sp2.
+                arom_detector = EnhancedAromaticityDetector(atoms, c_bonds)
                 for ring in basis_rings:
                     if len(ring) in [5, 6]:
                         if all(atoms.symbols[i] in ["C", "N", "O", "S"] for i in ring):
+                            if not _is_aromatic_ring(atoms, ring, arom_detector):
+                                continue
                             ring_pos = atoms.positions[ring]
                             center = np.mean(ring_pos, axis=0)
                             v1 = ring_pos[1] - ring_pos[0]

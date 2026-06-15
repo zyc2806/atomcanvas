@@ -10,13 +10,32 @@ const elementData = {
   H: { color: [1, 1, 1] as [number, number, number], radius: 0.31 },
 };
 
+// --- test helpers for the color+opacity bucket layout ---
+function meshesInGroup(scene: THREE.Scene, name: string): THREE.Mesh[] {
+  const g = scene.getObjectByName(name);
+  if (!g) return [];
+  const out: THREE.Mesh[] = [];
+  g.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh);
+  });
+  return out;
+}
+function meshByColor(scene: THREE.Scene, group: string, hex: string): THREE.Mesh | undefined {
+  return meshesInGroup(scene, group).find(
+    (m) => (m.material as THREE.MeshStandardMaterial).color.getHexString() === hex,
+  );
+}
+function boundingSphereRadius(mesh: THREE.Mesh): number {
+  mesh.geometry.computeBoundingSphere();
+  return mesh.geometry.boundingSphere!.radius;
+}
+
 describe('glbExporter', () => {
-  it('builds one mesh group per element plus bonds', () => {
+  it('groups atoms under an "atoms" node plus a "bonds" node', () => {
     const scene = buildExportScene(structure, vis, style, elementData);
-    const names = scene.children.map((c) => c.name).sort();
-    expect(names).toContain('atoms-O');
-    expect(names).toContain('atoms-H');
-    expect(names).toContain('bonds');
+    expect(scene.getObjectByName('atoms')).toBeDefined();
+    expect(scene.getObjectByName('bonds')).toBeDefined();
+    expect(meshesInGroup(scene, 'atoms').length).toBeGreaterThan(0);
   });
 
   it('produces a binary glb (magic bytes glTF)', async () => {
@@ -27,10 +46,9 @@ describe('glbExporter', () => {
 
   it('sizes sphere geometry to match the viewport radius formula', () => {
     const scene = buildExportScene(structure, vis, style, elementData);
-    const oMesh = scene.children.find((c) => c.name === 'atoms-O') as THREE.Mesh;
-    oMesh.geometry.computeBoundingSphere();
-    // single O atom at origin, radius 0.66, no radiusScale -> bounding sphere ~0.66
-    expect(oMesh.geometry.boundingSphere!.radius).toBeCloseTo(0.66, 3);
+    // O resolves to elementData color [1,0,0] -> ff0000; single O atom -> r 0.66
+    const oMesh = meshByColor(scene, 'atoms', 'ff0000')!;
+    expect(boundingSphereRadius(oMesh)).toBeCloseTo(0.66, 3);
   });
 
   it('applies preset element overrides (color + radiusScale)', () => {
@@ -39,11 +57,50 @@ describe('glbExporter', () => {
       bondsStyle: style.bondsStyle,
     };
     const scene = buildExportScene(structure, vis, styled, elementData);
-    const oMesh = scene.children.find((c) => c.name === 'atoms-O') as THREE.Mesh;
-    oMesh.geometry.computeBoundingSphere();
-    expect(oMesh.geometry.boundingSphere!.radius).toBeCloseTo(1.32, 3);
+    const oMesh = meshByColor(scene, 'atoms', '00ff00')!;
+    expect(oMesh).toBeDefined();
+    expect(boundingSphereRadius(oMesh)).toBeCloseTo(1.32, 3);
+  });
+
+  it('applies a per-atom color override (selection) over the element color', () => {
+    const scene = buildExportScene(structure, vis, style, elementData, {
+      colorOverrides: { 0: '#123456' },
+    });
+    expect(meshByColor(scene, 'atoms', '123456')).toBeDefined();
+  });
+
+  it('applies a per-atom radius override (selection size)', () => {
+    const scene = buildExportScene(structure, vis, style, elementData, {
+      // shrink the O atom (index 0) to 0.5x
+      radiusOverrides: { 0: 0.5 },
+    });
+    const oMesh = meshByColor(scene, 'atoms', 'ff0000')!;
+    expect(boundingSphereRadius(oMesh)).toBeCloseTo(0.33, 3);
+  });
+
+  it('applies a per-atom opacity override (transparent material)', () => {
+    const scene = buildExportScene(structure, vis, style, elementData, {
+      opacityOverrides: { 0: 0.4 },
+    });
+    const oMesh = meshByColor(scene, 'atoms', 'ff0000')!;
     const mat = oMesh.material as THREE.MeshStandardMaterial;
-    expect(mat.color.getHexString()).toBe('00ff00');
+    expect(mat.transparent).toBe(true);
+    expect(mat.opacity).toBeCloseTo(0.4, 5);
+  });
+
+  it('bakes renderStyle into material roughness (standard low, soft high)', () => {
+    const stdMesh = meshByColor(
+      buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }),
+      'atoms',
+      'ff0000',
+    )!;
+    const softMesh = meshByColor(
+      buildExportScene(structure, vis, style, elementData, { renderStyle: 'soft' }),
+      'atoms',
+      'ff0000',
+    )!;
+    expect((stdMesh.material as THREE.MeshStandardMaterial).roughness).toBeCloseTo(0.3, 5);
+    expect((softMesh.material as THREE.MeshStandardMaterial).roughness).toBeCloseTo(1.0, 5);
   });
 
   it('getElementData builds element data from atomStyles + radii formula', () => {
@@ -142,6 +199,14 @@ describe('glbExporter aromatic-ring fidelity', () => {
     const scene = buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [] }, uniformStyle, ccData);
     expect(scene.getObjectByName('rings')).toBeUndefined();
   });
+
+  it('colors the ring by the nearest atom per-atom color override (mirrors AromaticRings.tsx)', () => {
+    // ring center [0,0,0] is nearest to atom 0 (also at the origin).
+    const scene = buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [ring] }, uniformStyle, ccData, {
+      colorOverrides: { 0: '#abcdef' },
+    });
+    expect(meshByColor(scene, 'rings', 'abcdef')).toBeDefined();
+  });
 });
 
 describe('glbExporter robustness', () => {
@@ -149,5 +214,45 @@ describe('glbExporter robustness', () => {
     const broken = { symbols: ['C', 'C'], positions: [[0, 0, 0], [NaN, 0, 0]] };
     const scene = buildExportScene(broken, { bonds: [[0, 1, 1]] }, uniformStyle, ccData);
     expect(bondVertexCount(scene)).toBe(0);
+  });
+});
+
+// --- Fidelity: bond color + opacity must match the viewport -----------------
+// Bonds.tsx ALWAYS colors each half by its endpoint atom's per-atom color and
+// resolves per-half opacity (resolveBondHalfOpacity). The glb export must too.
+
+describe('glbExporter bond color/opacity fidelity', () => {
+  const oh = { symbols: ['O', 'H'], positions: [[0, 0, 0], [0.96, 0, 0]] };
+  const ohStyle = {
+    elements: {},
+    // colorMode uniform must be IGNORED — the viewport always element-splits.
+    bondsStyle: { style: 'cylinder' as const, radius: 0.12, colorMode: 'uniform' as const },
+  };
+
+  it('colors each bond half by its endpoint atom color, ignoring colorMode', () => {
+    const scene = buildExportScene(oh, { bonds: [[0, 1, 1]] }, ohStyle, elementData);
+    // O half -> ff0000, H half -> ffffff
+    expect(meshByColor(scene, 'bonds', 'ff0000')).toBeDefined();
+    expect(meshByColor(scene, 'bonds', 'ffffff')).toBeDefined();
+  });
+
+  it('uses the per-atom color override on the corresponding bond half', () => {
+    const scene = buildExportScene(oh, { bonds: [[0, 1, 1]] }, ohStyle, elementData, {
+      colorOverrides: { 0: '#123456' },
+    });
+    expect(meshByColor(scene, 'bonds', '123456')).toBeDefined();
+  });
+
+  it('applies a bond opacity override to both halves (transparent)', () => {
+    const scene = buildExportScene(oh, { bonds: [[0, 1, 1]] }, ohStyle, elementData, {
+      bondOpacityOverrides: { '0-1': 0.3 },
+    });
+    const halves = meshesInGroup(scene, 'bonds');
+    expect(halves.length).toBeGreaterThan(0);
+    for (const m of halves) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      expect(mat.transparent).toBe(true);
+      expect(mat.opacity).toBeCloseTo(0.3, 5);
+    }
   });
 });

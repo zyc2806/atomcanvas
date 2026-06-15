@@ -35,16 +35,29 @@ const bondIdFor = (i: number, j: number): string =>
 
 export function BondEditPanel() {
   const selectedAtoms = useStructureStore((s) => s.selectedAtoms);
+  const selectedBonds = useStructureStore((s) => s.selectedBonds);
   const topologyOverrides = useStructureStore((s) => s.topologyOverrides);
   const setTopologyOverride = useStructureStore((s) => s.setTopologyOverride);
   const clearTopologyOverrides = useStructureStore((s) => s.clearTopologyOverrides);
 
   const [order, setOrder] = useState<BondOrder>('1.0');
 
-  const pairId = useMemo(() => {
-    if (selectedAtoms.length !== 2) return null;
-    return bondIdFor(selectedAtoms[0], selectedAtoms[1]);
-  }, [selectedAtoms]);
+  // Bonds to act on. A bond clicked in the viewer populates `selectedBonds`
+  // and takes priority; otherwise fall back to the bond implied by a two-atom
+  // selection so the user can still create or edit a bond between two atoms
+  // that may not yet be bonded.
+  const targetBondIds = useMemo<string[]>(() => {
+    if (selectedBonds.length > 0) return selectedBonds;
+    if (selectedAtoms.length === 2) return [bondIdFor(selectedAtoms[0], selectedAtoms[1])];
+    return [];
+  }, [selectedBonds, selectedAtoms]);
+
+  const targetLabel =
+    selectedBonds.length > 0
+      ? `${selectedBonds.length} bond${selectedBonds.length === 1 ? '' : 's'} selected`
+      : selectedAtoms.length === 2
+        ? `Bond ${selectedAtoms[0]}–${selectedAtoms[1]}`
+        : null;
 
   const overrideEntries = useMemo(
     () => Object.entries(topologyOverrides),
@@ -53,6 +66,12 @@ export function BondEditPanel() {
 
   const applyOverride = async (id: string, value: string | null) => {
     setTopologyOverride(id, value);
+    await refreshTopology();
+  };
+
+  const applyToTargets = async (value: string | null) => {
+    if (targetBondIds.length === 0) return;
+    targetBondIds.forEach((id) => setTopologyOverride(id, value));
     await refreshTopology();
   };
 
@@ -65,12 +84,12 @@ export function BondEditPanel() {
       <Divider sx={{ my: 2 }} />
 
       <Typography variant="subtitle2" gutterBottom>
-        Selected pair
+        Selected bond{targetBondIds.length === 1 ? '' : 's'}
       </Typography>
-      {pairId ? (
+      {targetBondIds.length > 0 ? (
         <Stack spacing={1.5}>
           <Typography variant="body2" color="text.secondary">
-            Bond {selectedAtoms[0]}–{selectedAtoms[1]}
+            {targetLabel}
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center">
             <Select
@@ -89,7 +108,7 @@ export function BondEditPanel() {
             <Button
               size="small"
               variant="contained"
-              onClick={() => applyOverride(pairId, order)}
+              onClick={() => applyToTargets(order)}
             >
               Set order
             </Button>
@@ -99,14 +118,15 @@ export function BondEditPanel() {
             color="error"
             variant="outlined"
             startIcon={<DeleteIcon />}
-            onClick={() => applyOverride(pairId, 'delete')}
+            onClick={() => applyToTargets('delete')}
           >
-            Delete bond
+            Delete bond{targetBondIds.length === 1 ? '' : 's'}
           </Button>
         </Stack>
       ) : (
         <Typography variant="body2" color="text.secondary">
-          Select exactly two atoms to add, set the order of, or delete a bond.
+          Click a bond in the viewer, or select exactly two atoms, to set its
+          order or delete it.
         </Typography>
       )}
 

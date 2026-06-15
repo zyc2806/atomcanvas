@@ -39,6 +39,29 @@ BOND_LENGTH_TABLE = {
     frozenset(['S', 'S']): {1.0: 2.05, 2.0: 1.89},
 }
 
+# Aromatic rings are essentially flat; a saturated chair/half-chair ring
+# puckers well beyond this tolerance (Å).
+AROMATIC_PLANARITY_TOL = 0.1
+
+
+def ring_max_plane_deviation(positions, ring) -> float:
+    """Max out-of-plane distance (Å) of ring atoms from their best-fit plane."""
+    pts = np.asarray(positions)[list(ring)]
+    centroid = pts.mean(axis=0)
+    centered = pts - centroid
+    # The singular vector with the smallest singular value is the plane normal.
+    _, _, vh = np.linalg.svd(centered)
+    normal = vh[-1]
+    return float(np.max(np.abs(centered @ normal)))
+
+
+def is_planar_ring(positions, ring, tol: float = AROMATIC_PLANARITY_TOL) -> bool:
+    """True when every ring atom lies within ``tol`` of the ring's mean plane."""
+    if len(ring) < 3:
+        return False
+    return ring_max_plane_deviation(positions, ring) <= tol
+
+
 class EnhancedAromaticityDetector:
     def __init__(self, atoms: Atoms, bonds: List):
         self.atoms = atoms
@@ -132,8 +155,11 @@ class EnhancedAromaticityDetector:
             sd = SpecialStructureDetector(self.atoms, self.bonds)
             rings = sd.detect_small_rings(max_size=6)
             for ring in rings:
-                if len(ring) == 6:
-                    if all(self.symbols[i] == 'C' for i in ring):
+                if len(ring) == 6 and all(self.symbols[i] == 'C' for i in ring):
+                    # Only treat a pure-carbon 6-ring as an sp2 network when it
+                    # is actually planar. A puckered (chair) ring is saturated,
+                    # not aromatic, and must not get forced 1.5 bond orders.
+                    if is_planar_ring(self.positions, ring):
                         for i in ring:
                             sp2_atoms.add(i)
 

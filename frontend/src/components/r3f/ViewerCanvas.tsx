@@ -532,7 +532,7 @@ const SceneContent: React.FC = () => {
                 opacityOverrides={mergedOpacityOverrides}
                 radiusOverrides={mergedRadiusOverrides}
             />
-            <Bonds />
+            <Bonds radiusOverrides={mergedRadiusOverrides} />
             <AromaticRings />
             {showHBonds && <HBonds />}
             {showUnitCell && <UnitCell />}

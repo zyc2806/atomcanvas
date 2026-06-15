@@ -201,7 +201,7 @@ const SelectionPanel: React.FC = () => {
     };
 
     return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ p: 2, width: 340, boxSizing: 'border-box', minWidth: 0, overflowX: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
                  <Typography variant="body2">{selectedAtoms.length} atoms selected</Typography>
             </Paper>
@@ -219,6 +219,7 @@ const SelectionPanel: React.FC = () => {
                         color={activeMethod === m.id ? 'primary' : 'default'}
                         variant={activeMethod === m.id ? 'filled' : 'outlined'}
                         onClick={() => setActiveMethod(m.id)}
+                        sx={{ height: 24, fontSize: '0.72rem' }}
                     />
                 ))}
             </Box>

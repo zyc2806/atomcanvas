@@ -23,6 +23,7 @@ export function OperationModeSelector({ value, onChange }: Props) {
       value={value}
       onChange={(_, v) => { if (v) onChange(v as OpMode); }}
       aria-label="selection operation mode"
+      sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 0.75, py: 0.5, fontSize: '0.72rem', minWidth: 0 } }}
     >
       {MODES.map((m) => (
         <ToggleButton key={m.value} value={m.value}>{m.label}</ToggleButton>

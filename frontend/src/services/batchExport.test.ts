@@ -80,3 +80,59 @@ describe('buildSceneForDoc bond radius source', () => {
     expect(wider).toBeGreaterThan(base + 1e-3);
   });
 });
+
+// Per-atom overrides are snapshotted per-tab; a batch export must source each
+// tab's own overrides so one tab's selection colors never leak onto another.
+describe('buildSceneForDoc per-tab override isolation', () => {
+  const atomDoc = () =>
+    ({
+      structure: { symbols: ['O'], positions: [[0, 0, 0]] },
+      visualization: { bonds: [], rings: [] },
+    }) as never;
+
+  function atomColors(scene: THREE.Scene): string[] {
+    const g = scene.getObjectByName('atoms');
+    const out: string[] = [];
+    g?.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) out.push((m.material as THREE.MeshStandardMaterial).color.getHexString());
+    });
+    return out;
+  }
+
+  it("uses each tab's own color overrides, not the active tab's", () => {
+    useStructureStore.setState({ tabs: [], activeTabId: null, elements: {}, atomStyles: {} });
+    const aId = useStructureStore.getState().addTab(atomDoc(), 'A');
+    // A selection recolor writes the per-atom (pure-selection) map.
+    useStructureStore.setState({
+      perAtomColorOverrides: { 0: '#ff0000' },
+      colorOverrides: { 0: '#ff0000' },
+    });
+    const bId = useStructureStore.getState().addTab(atomDoc(), 'B'); // snapshots A, B active, no override
+
+    const colorsA = atomColors(buildSceneForDoc(atomDoc(), aId));
+    const colorsB = atomColors(buildSceneForDoc(atomDoc(), bId));
+
+    expect(colorsA).toContain('ff0000'); // A keeps its red selection override
+    expect(colorsB).not.toContain('ff0000'); // B did not inherit A's override
+  });
+
+  it('exports an inactive tab with the LIVE element color, not the stale snapshot', () => {
+    useStructureStore.setState({ tabs: [], activeTabId: null, atomStyles: {} });
+    const aId = useStructureStore.getState().addTab(atomDoc(), 'A');
+    // Simulate StylePanel baking element O=green into the visible colorOverrides
+    // while tab A is active (perAtom map stays empty — this is element styling).
+    useStructureStore.setState({
+      elements: { O: { color: '#00ff00' } },
+      colorOverrides: { 0: '#00ff00' },
+      perAtomColorOverrides: null,
+    });
+    useStructureStore.getState().addTab(atomDoc(), 'B'); // snapshots A's green colorOverrides
+    // Element O is restyled globally to red while on tab B.
+    useStructureStore.setState({ elements: { O: { color: '#ff0000' } } });
+
+    const colorsA = atomColors(buildSceneForDoc(atomDoc(), aId));
+    expect(colorsA).toContain('ff0000'); // live element color, as the viewport would show
+    expect(colorsA).not.toContain('00ff00'); // not the stale snapshot color
+  });
+});

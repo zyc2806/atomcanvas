@@ -5,7 +5,8 @@ import radiiData from '../data/radii.json';
 import { getAtomicNumber } from '../utils/chemistry';
 import { getBondRadiusScale } from '../utils/bondUtils';
 import { getNearestAtomIndexToRing } from '../components/r3f/aromaticRingsUtils';
-import type { ElementStyle, BondStyleSettings } from '../types/store';
+import { resolveBondHalfOpacity, isOpacityTransparent } from '../components/r3f/materials/opacityPolicy';
+import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/store';
 
 /**
  * GLB exporter — produces a binary glTF whose geometry matches the live
@@ -22,10 +23,19 @@ import type { ElementStyle, BondStyleSettings } from '../types/store';
  * — mirroring Bonds.tsx (lines 220-237) and AromaticRings.tsx so a benzene
  * exported for PowerPoint keeps its double bonds and donuts.
  *
+ * Live edits are honored via the optional `overrides` argument (see
+ * `ExportOverrides`): per-atom color, size and opacity (selection edits), per-bond
+ * opacity, and the render style. Atoms/bonds are bucketed by (color, opacity) so
+ * per-atom styling survives the merge; each bond half is colored by its endpoint
+ * atom (the viewport always element-splits, regardless of bondsStyle.colorMode).
+ * `renderStyle` is baked into material roughness (standard 0.3 vs soft 1.0); the
+ * cartoon/wireframe looks cannot round-trip to glb and fall back to solid meshes.
+ *
  * Intentionally NOT exported (the glb captures the molecule's solid geometry, not
- * the full annotated scene): PBC-wrapped ghost bonds, hydrogen bonds (dashed),
- * the unit cell, and bond transparency. PNG export is a literal canvas snapshot
- * and does keep all of those.
+ * the full annotated scene): PBC-wrapped ghost bonds, hydrogen bonds (dashed), and
+ * the unit cell. PNG export is a literal canvas snapshot and does keep all of
+ * those. Note: glTF transparency (alphaMode BLEND) may not render in every
+ * downstream viewer (e.g. PowerPoint's 3D model viewer).
  *
  * No lights are baked into the scene; the GLB carries MeshStandardMaterials and
  * relies on the viewer/PowerPoint environment to light it.
@@ -48,6 +58,25 @@ interface MinimalStyle {
     bondsStyle: BondStyleSettings;
 }
 
+/**
+ * Per-atom / per-bond style overrides that mirror the live viewport. Atom maps
+ * are keyed by atom index (the values already win over element styling, exactly
+ * like ViewerCanvas's merged overrides). `bondOpacityOverrides` is keyed by the
+ * "min-max" bond id. `renderStyle` is baked into material roughness.
+ */
+export interface ExportOverrides {
+    colorOverrides?: { [i: number]: string };
+    opacityOverrides?: { [i: number]: number };
+    radiusOverrides?: { [i: number]: number };
+    bondOpacityOverrides?: { [bondId: string]: number };
+    renderStyle?: RenderStyle;
+}
+
+const bondIdFor = (i: number, j: number): string => `${Math.min(i, j)}-${Math.max(i, j)}`;
+
+const roughnessForRenderStyle = (renderStyle: RenderStyle | undefined): number =>
+    renderStyle === 'standard' ? 0.3 : 1.0;
+
 type AtomStyleMap = { [symbol: string]: { color: string; radius: number } };
 
 const SPHERE_SEGMENTS = 24;
@@ -55,8 +84,10 @@ const CYL_SEGMENTS = 16;
 const TORUS_TUBULAR_SEGMENTS = 64;
 const TORUS_RADIAL_SEGMENTS = 16;
 const FALLBACK_RADII = 0.5;
-const FALLBACK_COLOR: [number, number, number] = [0.8, 0.4, 0.8];
-const UNIFORM_BOND_COLOR: [number, number, number] = [0.55, 0.55, 0.55];
+// Unknown-element fallback. Matches the viewport's getAtomBaseColor fallback
+// (#ff1493) in src/hooks/useAtomColors.ts so an exotic symbol exports the same
+// color it renders on screen.
+const FALLBACK_COLOR: [number, number, number] = [1, 20 / 255, 147 / 255];
 
 const radii = radiiData as number[];
 
@@ -104,6 +135,54 @@ function mergeBuckets(
     return group;
 }
 
+interface StyleBucket {
+    color: [number, number, number];
+    opacity: number;
+    geoms: THREE.BufferGeometry[];
+}
+
+/** Like colorBuckets but also keyed by opacity, so per-atom / per-bond opacity
+ * survives the one-mesh-per-bucket merge (each distinct color+opacity becomes one
+ * transparent-or-opaque mesh). */
+function styleBuckets() {
+    const buckets = new Map<string, StyleBucket>();
+    const add = (color: [number, number, number], opacity: number, geom: THREE.BufferGeometry) => {
+        const key = `${color.join(',')}|${opacity.toFixed(4)}`;
+        let g = buckets.get(key);
+        if (!g) {
+            g = { color, opacity, geoms: [] };
+            buckets.set(key, g);
+        }
+        g.geoms.push(geom);
+    };
+    return { buckets, add };
+}
+
+function mergeStyleBuckets(
+    buckets: Map<string, StyleBucket>,
+    name: string,
+    roughness: number,
+): THREE.Object3D | null {
+    if (buckets.size === 0) return null;
+    const group = new THREE.Group();
+    group.name = name;
+    for (const { color, opacity, geoms } of buckets.values()) {
+        const transparent = isOpacityTransparent(opacity);
+        const mesh = new THREE.Mesh(
+            mergeGeometries(geoms),
+            new THREE.MeshStandardMaterial({
+                color: new THREE.Color(...color),
+                roughness,
+                metalness: 0.0,
+                transparent,
+                opacity,
+            }),
+        );
+        group.add(mesh);
+    }
+    return group;
+}
+
 /**
  * Build per-element {color, radius} from the store's atomStyles (colors) and the
  * viewer's radii.json formula (`radii[atomicNumber] * atomScale`). This is the
@@ -134,55 +213,52 @@ export function buildExportScene(
     vis: MinimalVis,
     style: MinimalStyle,
     elementData: Record<string, ElementData>,
+    overrides: ExportOverrides = {},
 ): THREE.Scene {
     const scene = new THREE.Scene();
+    const roughness = roughnessForRenderStyle(overrides.renderStyle);
 
-    // --- Atoms: one merged mesh per element ---
-    const bySymbol = new Map<string, number[]>();
-    structure.symbols.forEach((s, i) => {
-        if (!bySymbol.has(s)) bySymbol.set(s, []);
-        bySymbol.get(s)!.push(i);
-    });
-
-    // Resolve the per-element color used by atoms AND split-color bond halves so
-    // they stay consistent.
+    // Per-atom style resolvers mirroring the live viewport (Atoms.tsx): a
+    // per-atom override (selection color/size/opacity) wins, otherwise the
+    // element-level style applies. Element color also drives split-color bond
+    // halves so atoms and bonds stay consistent.
     const colorForSymbol = (sym: string): [number, number, number] => {
         const st = style.elements[sym] ?? {};
         if (st.color) return hexToRgb(st.color);
         return elementData[sym]?.color ?? FALLBACK_COLOR;
     };
+    const colorForAtom = (i: number, sym: string): [number, number, number] => {
+        const c = overrides.colorOverrides?.[i];
+        return c !== undefined ? hexToRgb(c) : colorForSymbol(sym);
+    };
+    const opacityForAtom = (i: number, sym: string): number => {
+        const o = overrides.opacityOverrides?.[i];
+        return o !== undefined ? o : (style.elements[sym]?.opacity ?? 1);
+    };
+    const radiusForAtom = (i: number, sym: string): number => {
+        const base = elementData[sym]?.radius ?? FALLBACK_RADII;
+        const scale = overrides.radiusOverrides?.[i] ?? style.elements[sym]?.radiusScale ?? 1;
+        return base * scale;
+    };
 
-    for (const [sym, indices] of bySymbol) {
-        const st = style.elements[sym] ?? {};
-        const base = elementData[sym] ?? { color: FALLBACK_COLOR, radius: FALLBACK_RADII };
-        const radius = base.radius * (st.radiusScale ?? 1);
-        const color = colorForSymbol(sym);
-        const geoms = indices.map((i) => {
-            const g = new THREE.SphereGeometry(radius, SPHERE_SEGMENTS, SPHERE_SEGMENTS);
-            g.translate(structure.positions[i][0], structure.positions[i][1], structure.positions[i][2]);
-            return g;
-        });
-        const opacity = st.opacity ?? 1;
-        const mesh = new THREE.Mesh(
-            mergeGeometries(geoms),
-            new THREE.MeshStandardMaterial({
-                color: new THREE.Color(...color),
-                roughness: 0.35,
-                metalness: 0.0,
-                transparent: opacity < 1,
-                opacity,
-            }),
-        );
-        mesh.name = `atoms-${sym}`;
-        scene.add(mesh);
-    }
+    // --- Atoms: merged meshes bucketed by (color, opacity) so per-atom styles
+    //     survive the merge while the glb stays light. ---
+    const { buckets: atomBuckets, add: addAtom } = styleBuckets();
+    structure.symbols.forEach((sym, i) => {
+        const radius = radiusForAtom(i, sym);
+        const g = new THREE.SphereGeometry(radius, SPHERE_SEGMENTS, SPHERE_SEGMENTS);
+        g.translate(structure.positions[i][0], structure.positions[i][1], structure.positions[i][2]);
+        addAtom(colorForAtom(i, sym), opacityForAtom(i, sym), g);
+    });
+    const atomsGroup = mergeStyleBuckets(atomBuckets, 'atoms', roughness);
+    if (atomsGroup) scene.add(atomsGroup);
 
     // --- Bonds: cylinders (1/2/3 per bond by order) under a single `bonds` node ---
-    const bondsGroup = buildBonds(structure, vis, style, colorForSymbol);
+    const bondsGroup = buildBonds(structure, vis, style, colorForAtom, opacityForAtom, overrides, roughness);
     if (bondsGroup) scene.add(bondsGroup);
 
     // --- Aromatic rings: a torus per ring under a single `rings` node ---
-    const ringsGroup = buildRings(structure, vis, colorForSymbol);
+    const ringsGroup = buildRings(structure, vis, colorForAtom);
     if (ringsGroup) scene.add(ringsGroup);
 
     return scene;
@@ -246,12 +322,15 @@ function buildBonds(
     structure: MinimalStructure,
     vis: MinimalVis,
     style: MinimalStyle,
-    colorForSymbol: (sym: string) => [number, number, number],
+    colorForAtom: (i: number, sym: string) => [number, number, number],
+    opacityForAtom: (i: number, sym: string) => number,
+    overrides: ExportOverrides,
+    roughness: number,
 ): THREE.Object3D | null {
-    const { radius, colorMode, uniformColor } = style.bondsStyle;
+    const { radius } = style.bondsStyle;
     const cylAxis = new THREE.Vector3(0, 1, 0);
-    const splitColor = colorMode === 'element-split';
     const { symbols, positions } = structure;
+    const bondOpacityOverrides = overrides.bondOpacityOverrides;
 
     // Adjacency (over bond endpoints) lets computeBondAxes orient double/triple
     // bonds into their ring plane, exactly like the live renderer.
@@ -269,7 +348,7 @@ function buildBonds(
         link(j, i);
     }
 
-    const { buckets, add } = colorBuckets();
+    const { buckets, add } = styleBuckets();
 
     const makeCyl = (
         center: THREE.Vector3,
@@ -282,8 +361,6 @@ function buildBonds(
         g.translate(center.x, center.y, center.z);
         return g;
     };
-
-    const uniform: [number, number, number] = uniformColor ? hexToRgb(uniformColor) : UNIFORM_BOND_COLOR;
 
     for (const bond of vis.bonds) {
         const i = bond[0];
@@ -327,20 +404,26 @@ function buildBonds(
             offsets.push(new THREE.Vector3(0, 0, 0));
         }
 
+        // The viewport always element-splits a bond: each half is colored by its
+        // endpoint atom's (possibly overridden) color, and its opacity follows
+        // the endpoint atom unless a per-bond opacity override is set.
+        const bondId = bondIdFor(i, j);
+        const bondOverride = bondOpacityOverrides?.[bondId];
+        const colorI = colorForAtom(i, symbols[i]);
+        const colorJ = colorForAtom(j, symbols[j]);
+        const opacityI = resolveBondHalfOpacity(opacityForAtom(i, symbols[i]), bondOverride);
+        const opacityJ = resolveBondHalfOpacity(opacityForAtom(j, symbols[j]), bondOverride);
+
         for (const off of offsets) {
             const sa = a.clone().add(off);
-            if (splitColor) {
-                const half = len / 2;
-                // first half belongs to atom i, second to atom j
-                add(colorForSymbol(symbols[i]), makeCyl(sa.clone().addScaledVector(dirN, len * 0.25), dirN, half, cylRadius));
-                add(colorForSymbol(symbols[j]), makeCyl(sa.clone().addScaledVector(dirN, len * 0.75), dirN, half, cylRadius));
-            } else {
-                add(uniform, makeCyl(sa.clone().addScaledVector(dirN, len * 0.5), dirN, len, cylRadius));
-            }
+            const half = len / 2;
+            // first half belongs to atom i, second to atom j
+            add(colorI, opacityI, makeCyl(sa.clone().addScaledVector(dirN, len * 0.25), dirN, half, cylRadius));
+            add(colorJ, opacityJ, makeCyl(sa.clone().addScaledVector(dirN, len * 0.75), dirN, half, cylRadius));
         }
     }
 
-    return mergeBuckets(buckets, 'bonds', 0.45);
+    return mergeStyleBuckets(buckets, 'bonds', roughness);
 }
 
 /**
@@ -352,7 +435,7 @@ function buildBonds(
 function buildRings(
     structure: MinimalStructure,
     vis: MinimalVis,
-    colorForSymbol: (sym: string) => [number, number, number],
+    colorForAtom: (i: number, sym: string) => [number, number, number],
 ): THREE.Object3D | null {
     const rings = vis.rings;
     if (!rings || rings.length === 0) return null;
@@ -374,7 +457,7 @@ function buildRings(
         g.translate(center[0], center[1], center[2]);
 
         const nearest = getNearestAtomIndexToRing([center[0], center[1], center[2]], positions);
-        const color = nearest !== null ? colorForSymbol(structure.symbols[nearest]) : FALLBACK_COLOR;
+        const color = nearest !== null ? colorForAtom(nearest, structure.symbols[nearest]) : FALLBACK_COLOR;
         add(color, g);
     }
 

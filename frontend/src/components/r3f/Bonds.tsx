@@ -30,6 +30,9 @@ interface BondsProps {
     customBonds?: [number, number, number?][];
     customGhostBonds?: [[number, number, number], [number, number, number], number, number, number][];
     customPositions?: [number, number, number][];
+    // Per-atom radius overrides (Size slider / per-element scale). Mirrors
+    // Atoms.tsx so the bond trim follows the actual rendered atom radius.
+    radiusOverrides?: { [i: number]: number };
 }
 
 interface BondHalf {
@@ -47,7 +50,7 @@ interface BondHalf {
 
 type WrappedGhostBond = Visualization['wrapped_ghost_bonds'][number];
 
-const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds, customPositions }) => {
+const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds, customPositions, radiusOverrides }) => {
     const { 
         structureData: storeStructureData, 
         visParams, 
@@ -98,7 +101,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
             const symbol = symbols[atomIndex];
             const atomicNumber = getAtomicNumber(symbol);
             const elementRadius = radiiData[atomicNumber] || 0.5;
-            return getModeAdjustedAtomRadius(elementRadius, atomScale, displayMode);
+            return getModeAdjustedAtomRadius(elementRadius, atomScale, displayMode, radiusOverrides?.[atomIndex] ?? 1);
         };
 
         const adjacency: Record<number, number[]> = {};
@@ -412,7 +415,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
         }
 
         return halves;
-    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle]);
+    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle, radiusOverrides]);
 
     const alphaArray = useMemo(() => {
         const count = bondHalves.length;

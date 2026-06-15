@@ -14,6 +14,7 @@ import {
     shouldShowCartoonOutline,
 } from './materials/opacityPolicy';
 import { syncMaterialAlphaHash } from './materials/materialUpdate';
+import AtomLabels from './AtomLabels';
 
 interface AtomsProps {
     customPositions?: [number, number, number][];
@@ -39,7 +40,7 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
         return getAtomBaseOpacityForIndex(index);
     }, [opacityOverrides, getAtomBaseOpacityForIndex]);
     const meshRef = useRef<THREE.InstancedMesh>(null);
-    const { showShadows, showOutline } = viewControls;
+    const { showShadows, showOutline, showLabels } = viewControls;
     const { displayMode, renderStyle, cartoonParams, atomScale } = visParams;
     const [hovered, setHovered] = useState<number | null>(null);
 
@@ -148,6 +149,8 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
     if (!structureData) return null;
 
     const count = customPositions ? customPositions.length : structureData.structure.positions.length;
+    const labelPositions = customPositions || structureData.structure.positions;
+    const labelSymbols = structureData.structure.symbols;
 
     const handleClick = (e: ThreeEvent<MouseEvent>) => {
         e.stopPropagation();
@@ -251,11 +254,13 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
                     </mesh>
                 ))}
                 {tooltipElement}
+                <AtomLabels symbols={labelSymbols} positions={labelPositions} showLabels={showLabels} />
             </group>
         );
     }
 
     return (
+        <>
         <instancedMesh
             // key intentionally depends only on `count`. Including displayMode
             // or renderStyle here would force a full mount/unmount of the
@@ -285,6 +290,8 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
             {tooltipElement}
             {!isWireframe && showOutlineForStyle && <Outlines thickness={outlineThickness} color="black" />}
         </instancedMesh>
+        <AtomLabels symbols={labelSymbols} positions={labelPositions} showLabels={showLabels} />
+        </>
     );
 };
 

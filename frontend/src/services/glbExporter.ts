@@ -30,15 +30,16 @@ import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/stor
  * per-atom styling survives the merge; each bond half is colored by its endpoint
  * atom (the viewport always element-splits, regardless of bondsStyle.colorMode).
  * `renderStyle` is baked per style (see materialForRenderStyle): standard =
- * glossy (roughness 0.3) + a black inverted-hull outline; soft = matte
- * (roughness 1.0), no outline; cartoon = matte + an emissive base (so the flat
- * toon body survives without scene lights) + a thicker outline. The outline is a
- * BackSide inflated hull baked only for opaque buckets (transparent atoms skip
- * it, matching the live standard view). These are APPROXIMATIONS — the following
- * live looks CANNOT round-trip to a static glTF: soft shadows, screen-space AO,
- * the cartoon 3-band toon banding, the cartoon view-dependent white highlight,
- * and the pixel-constant / perspective-corrected outline width (the baked
- * outline is a fixed world-space offset instead). Wireframe is not represented.
+ * glossy (roughness 0.3); soft = matte (roughness 1.0); cartoon = matte +
+ * emissive base (so the flat toon body survives without scene lights).
+ * No outline is baked into the GLB — glTF 2.0 has no back-face-only mode and
+ * THREE.BackSide is silently dropped on export, causing the inflated hull to
+ * occlude atoms in PowerPoint. The on-screen WebGL view and PNG export keep the
+ * full outlined look; only the .glb omits it.
+ * These are APPROXIMATIONS — the following live looks CANNOT round-trip to a
+ * static glTF: soft shadows, screen-space AO, the cartoon 3-band toon banding,
+ * the cartoon view-dependent white highlight, and the pixel-constant /
+ * perspective-corrected outline width. Wireframe is not represented.
  *
  * The unit cell is exported (as 12 thin-cylinder edges under a `unitcell` node)
  * when the live `showUnitCell` view control is on and the structure carries a
@@ -85,55 +86,40 @@ export interface ExportOverrides {
     // Mirrors the live `showUnitCell` view control. When true (and a cell is
     // present) the 3x3 cell is exported as 12 thin-cylinder edges.
     showUnitCell?: boolean;
-    // Cartoon outline thickness (cartoonParams.outlineThickness); scales the
-    // baked inverted-hull offset for the cartoon style.
-    outlineThickness?: number;
 }
 
 const bondIdFor = (i: number, j: number): string => `${Math.min(i, j)}-${Math.max(i, j)}`;
-
-// World-space outline offset per unit of outline "thickness". The live outline
-// is pixel-constant / perspective-corrected and CANNOT round-trip to a static
-// glTF, so this is an approximation: a thin black inverted hull a fixed world
-// distance outside the surface.
-const OUTLINE_WORLD_OFFSET = 0.012;
 
 /** Per-render-style material recipe baked into the glb (issue #7). */
 interface RenderStyleMaterial {
     roughness: number;
     /** Base color is multiplied by this and baked into `emissive` (0 = none). */
     emissiveFactor: number;
-    /** World-space inverted-hull outline offset; 0 = no outline. */
-    outlineOffset: number;
 }
 
 /**
  * Translate the live render style into a baked material recipe. The live looks
  * cannot fully round-trip to glTF, so each style is approximated:
- *  - standard: glossy (low roughness) + black inverted-hull outline
+ *  - standard: glossy (low roughness)
  *  - cartoon : flat (high roughness) + emissive base (so the toon body survives
- *              without scene lights) + a thicker outline (cartoonParams)
- *  - soft    : flat, no outline (matte, lit by the environment)
- * An undefined style (direct callers / older tests) is treated as plain matte
- * with no outline, preserving the previous default.
+ *              without scene lights)
+ *  - soft    : flat, matte (lit by the environment)
+ * No outline is baked — glTF 2.0 has no back-face-only mode and THREE.BackSide
+ * is silently dropped on export, causing the hull to occlude atoms downstream
+ * (e.g. PowerPoint). The on-screen WebGL view keeps outlines; the .glb does not.
+ * An undefined style (direct callers / older tests) is treated as plain matte,
+ * preserving the previous default.
  */
-function materialForRenderStyle(
-    renderStyle: RenderStyle | undefined,
-    outlineThickness = 1,
-): RenderStyleMaterial {
+function materialForRenderStyle(renderStyle: RenderStyle | undefined): RenderStyleMaterial {
     switch (renderStyle) {
         case 'standard':
-            return { roughness: 0.3, emissiveFactor: 0, outlineOffset: OUTLINE_WORLD_OFFSET };
+            return { roughness: 0.3, emissiveFactor: 0 };
         case 'cartoon':
-            return {
-                roughness: 1.0,
-                emissiveFactor: 0.3,
-                outlineOffset: OUTLINE_WORLD_OFFSET * outlineThickness,
-            };
+            return { roughness: 1.0, emissiveFactor: 0.3 };
         case 'soft':
-            return { roughness: 1.0, emissiveFactor: 0, outlineOffset: 0 };
+            return { roughness: 1.0, emissiveFactor: 0 };
         default:
-            return { roughness: 1.0, emissiveFactor: 0, outlineOffset: 0 };
+            return { roughness: 1.0, emissiveFactor: 0 };
     }
 }
 
@@ -158,27 +144,6 @@ function bucketMaterial(
         params.opacity = opacity;
     }
     return new THREE.MeshStandardMaterial(params);
-}
-
-/** Black inverted-hull outline: the bucket geometry inflated along its normals,
- * drawn BackSide so only the silhouette shows. Plain glTF that round-trips. */
-function makeOutlineMesh(geometry: THREE.BufferGeometry, offset: number): THREE.Mesh {
-    const g = geometry.clone();
-    if (!g.getAttribute('normal')) g.computeVertexNormals();
-    const pos = g.getAttribute('position') as THREE.BufferAttribute;
-    const nor = g.getAttribute('normal') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-        pos.setXYZ(
-            i,
-            pos.getX(i) + nor.getX(i) * offset,
-            pos.getY(i) + nor.getY(i) * offset,
-            pos.getZ(i) + nor.getZ(i) * offset,
-        );
-    }
-    pos.needsUpdate = true;
-    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide }));
-    mesh.name = 'outline';
-    return mesh;
 }
 
 type AtomStyleMap = { [symbol: string]: { color: string; radius: number } };
@@ -232,9 +197,6 @@ function mergeBuckets(
     for (const { color, geoms } of buckets.values()) {
         const merged = mergeGeometries(geoms);
         group.add(new THREE.Mesh(merged, bucketMaterial(color, mat)));
-        if (mat.outlineOffset > 0) {
-            group.add(makeOutlineMesh(merged, mat.outlineOffset));
-        }
     }
     return group;
 }
@@ -273,12 +235,6 @@ function mergeStyleBuckets(
     for (const { color, opacity, geoms } of buckets.values()) {
         const merged = mergeGeometries(geoms);
         group.add(new THREE.Mesh(merged, bucketMaterial(color, mat, opacity)));
-        // Inverted-hull outline only for opaque buckets — the live standard
-        // outline is skipped for transparent atoms (Atoms.tsx), and an outline
-        // around a glass sphere would read as a hard black ring.
-        if (mat.outlineOffset > 0 && !isOpacityTransparent(opacity)) {
-            group.add(makeOutlineMesh(merged, mat.outlineOffset));
-        }
     }
     return group;
 }
@@ -316,7 +272,7 @@ export function buildExportScene(
     overrides: ExportOverrides = {},
 ): THREE.Scene {
     const scene = new THREE.Scene();
-    const mat = materialForRenderStyle(overrides.renderStyle, overrides.outlineThickness);
+    const mat = materialForRenderStyle(overrides.renderStyle);
 
     // Per-atom style resolvers mirroring the live viewport (Atoms.tsx): a
     // per-atom override (selection color/size/opacity) wins, otherwise the

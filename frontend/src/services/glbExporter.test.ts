@@ -25,7 +25,9 @@ function meshByColor(scene: THREE.Scene, group: string, hex: string): THREE.Mesh
     (m) => (m.material as THREE.MeshStandardMaterial).color.getHexString() === hex,
   );
 }
-// Baked inverted-hull outline meshes: black MeshBasicMaterial rendered BackSide.
+// Regression canary: finds any black BackSide inverted-hull outline mesh. The
+// glb no longer bakes these (glTF can't round-trip THREE.BackSide), so this must
+// always return [] — a non-empty result means the black-blob outline came back.
 function outlineMeshes(scene: THREE.Scene, group: string): THREE.Mesh[] {
   return meshesInGroup(scene, group).filter((m) => {
     const mat = m.material as THREE.Material;
@@ -131,32 +133,30 @@ describe('glbExporter', () => {
     }
   });
 
-  it('bakes a BackSide outline for standard and cartoon, but not soft', () => {
+  it('bakes no outline mesh for any render style (glTF cannot round-trip BackSide)', () => {
     expect(
       outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }), 'atoms').length,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     expect(
       outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'cartoon' }), 'atoms').length,
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     expect(
       outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'soft' }), 'atoms').length,
     ).toBe(0);
   });
 
-  it('skips the baked outline for transparent atoms (matches the live standard)', () => {
-    const opaque = outlineMeshes(
-      buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }),
-      'atoms',
-    ).length;
-    const withTransparent = outlineMeshes(
-      buildExportScene(structure, vis, style, elementData, {
-        renderStyle: 'standard',
-        opacityOverrides: { 0: 0.3 },
-      }),
-      'atoms',
-    ).length;
-    // Making one of the two element buckets transparent drops exactly its outline.
-    expect(withTransparent).toBe(opaque - 1);
+  it('no BackSide mesh anywhere in the scene for any style or opacity (round-trip regression guard)', () => {
+    for (const renderStyle of ['standard', 'cartoon', 'soft'] as const) {
+      for (const opacityOverrides of [{}, { 0: 0.3 }]) {
+        const scene = buildExportScene(structure, vis, style, elementData, { renderStyle, opacityOverrides });
+        scene.traverse((o) => {
+          const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+          if (mat) {
+            expect(mat.side).not.toBe(THREE.BackSide);
+          }
+        });
+      }
+    }
   });
 
   it('getElementData builds element data from atomStyles + radii formula', () => {
@@ -277,7 +277,7 @@ describe('glbExporter aromatic-ring fidelity', () => {
     expect(meshByColor(scene, 'rings', 'abcdef')).toBeDefined();
   });
 
-  it('honors the render style on ring materials (roughness + outline)', () => {
+  it('honors the render style on ring materials (roughness; no outline baked for any style)', () => {
     const ringScene = (renderStyle: 'standard' | 'soft' | 'cartoon') =>
       buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [ring] }, uniformStyle, ccData, { renderStyle });
     const ringMat = (scene: THREE.Scene) =>
@@ -286,9 +286,9 @@ describe('glbExporter aromatic-ring fidelity', () => {
       )!.material as THREE.MeshStandardMaterial;
     expect(ringMat(ringScene('standard')).roughness).toBeCloseTo(0.3, 5);
     expect(ringMat(ringScene('soft')).roughness).toBeCloseTo(1.0, 5);
-    // standard + cartoon get the inverted-hull outline; soft does not.
-    expect(outlineMeshes(ringScene('standard'), 'rings').length).toBeGreaterThan(0);
-    expect(outlineMeshes(ringScene('cartoon'), 'rings').length).toBeGreaterThan(0);
+    // No BackSide outline baked for any style — glTF cannot round-trip THREE.BackSide.
+    expect(outlineMeshes(ringScene('standard'), 'rings').length).toBe(0);
+    expect(outlineMeshes(ringScene('cartoon'), 'rings').length).toBe(0);
     expect(outlineMeshes(ringScene('soft'), 'rings').length).toBe(0);
   });
 

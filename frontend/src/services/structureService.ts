@@ -4,7 +4,7 @@ import type {
     Structure,
 } from '../types/store';
 
-export type ExportScope = 'current_frame';
+export type ExportScope = 'current_frame' | 'full_trajectory';
 
 export interface ExportWarning {
     code: string;
@@ -20,6 +20,7 @@ export interface ExportRequestPayload {
     fixed_atoms?: number[];
     structure_version: number;
     file_name?: string;
+    trajectory?: Structure[];
 }
 
 export interface ExportResponsePayload {
@@ -77,18 +78,61 @@ const parseFilenameFromContentDisposition = (rawHeader: unknown): string | undef
     return match?.[1];
 };
 
+const detailMessageFrom = (parsed: unknown): string | null => {
+    const detail = (parsed as { detail?: unknown })?.detail;
+    if (detail && typeof detail === 'object') {
+        const d = detail as { message?: unknown; code?: unknown };
+        if (typeof d.message === 'string') return d.message;
+        if (typeof d.code === 'string') return d.code;
+    }
+    if (typeof detail === 'string') return detail;
+    return null;
+};
+
+// Export requests use `responseType: 'blob'`, so a JSON error body (e.g. a 409
+// PERIODIC_REQUIRED) arrives as a Blob and axios surfaces only the bare status
+// line ("...status code 409"). Read the body back so the UI can show the
+// backend's actual `detail.message` (e.g. "Format 'vasp' requires periodic data").
+const backendErrorMessage = async (error: unknown): Promise<string | null> => {
+    const data = (error as { response?: { data?: unknown } })?.response?.data;
+    if (data instanceof Blob) {
+        try {
+            return detailMessageFrom(JSON.parse(await data.text()));
+        } catch {
+            return null;
+        }
+    }
+    if (typeof data === 'string') {
+        try {
+            return detailMessageFrom(JSON.parse(data));
+        } catch {
+            return null;
+        }
+    }
+    if (data && typeof data === 'object') {
+        return detailMessageFrom(data);
+    }
+    return null;
+};
+
 export const buildExportPayload = ({
     structureData,
     scope,
     format,
     structureVersion,
-}: BuildExportPayloadParams): ExportRequestPayload => ({
-    format,
-    scope,
-    structure: structureData.structure,
-    fixed_atoms: structureData.visualization.fixed_atoms ?? [],
-    structure_version: structureVersion,
-});
+}: BuildExportPayloadParams): ExportRequestPayload => {
+    const payload: ExportRequestPayload = {
+        format,
+        scope,
+        structure: structureData.structure,
+        fixed_atoms: structureData.visualization.fixed_atoms ?? [],
+        structure_version: structureVersion,
+    };
+    if (scope === 'full_trajectory' && structureData.trajectory?.length) {
+        payload.trajectory = structureData.trajectory;
+    }
+    return payload;
+};
 
 export const structureService = {
     uploadStructure: async (file: File): Promise<StandardStructureObject> => {
@@ -103,17 +147,25 @@ export const structureService = {
     },
 
     exportStructure: async (payload: ExportRequestPayload): Promise<ExportResponsePayload> => {
-        const response = await apiClient.post<Blob>('/structure/export', payload, {
-            responseType: 'blob',
-        });
+        try {
+            const response = await apiClient.post<Blob>('/structure/export', payload, {
+                responseType: 'blob',
+            });
 
-        const warnings = parseWarningsHeader(response.headers?.['x-export-warnings']);
-        const filename = parseFilenameFromContentDisposition(response.headers?.['content-disposition']);
+            const warnings = parseWarningsHeader(response.headers?.['x-export-warnings']);
+            const filename = parseFilenameFromContentDisposition(response.headers?.['content-disposition']);
 
-        return {
-            blob: response.data,
-            warnings,
-            filename,
-        };
+            return {
+                blob: response.data,
+                warnings,
+                filename,
+            };
+        } catch (error) {
+            // Surface the backend's detail.message (hidden inside the Blob body
+            // by responseType:'blob') instead of axios's bare "...status code N".
+            const message = await backendErrorMessage(error);
+            if (message) throw new Error(message);
+            throw error;
+        }
     },
 };

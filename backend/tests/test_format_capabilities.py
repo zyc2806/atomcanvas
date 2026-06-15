@@ -61,3 +61,13 @@ def test_xyz_has_no_write_not_supported():
     )
     codes = [w.code for w in warnings]
     assert "WRITE_NOT_SUPPORTED" not in codes
+
+
+def test_xdatcar_resolves_to_vasp_xdatcar():
+    """The 'xdatcar' registry key must alias to 'vasp-xdatcar'.
+
+    ase.io.write(format='xdatcar') raises UnknownFileTypeError; the real ASE
+    format string is 'vasp-xdatcar'.  This test fails until ase_write_format
+    is added to the 'xdatcar' entry.
+    """
+    assert resolve_ase_write_format("xdatcar") == "vasp-xdatcar"

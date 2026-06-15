@@ -77,6 +77,9 @@ FORMAT_CAPABILITIES: dict[str, FormatCapability] = {
         supports_periodic=True,
         requires_periodic=True,
         supports_constraints=False,
+        # ase.io.write(format='xdatcar') raises UnknownFileTypeError; the real
+        # ASE write format string is 'vasp-xdatcar'.
+        ase_write_format="vasp-xdatcar",
     ),
     "vasp-xdatcar": FormatCapability(
         name="vasp-xdatcar",

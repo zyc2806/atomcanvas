@@ -62,10 +62,24 @@ def _sanitize_upload_filename(filename: str | None) -> str:
     return candidate
 
 
+# VASP files carry no extension; hint the reader by conventional stem so an
+# uploaded POSCAR/CONTCAR/OUTCAR/XDATCAR is read as the right VASP flavour
+# before autodetect.
+_VASP_STEM_HINTS: dict[str, list[str]] = {
+    "POSCAR": ["vasp"],
+    "CONTCAR": ["vasp"],
+    "OUTCAR": ["vasp-out"],
+    "XDATCAR": ["vasp-xdatcar"],
+}
+
+
 def _upload_format_candidates(filename: str) -> List[str]:
-    suffix = Path(filename).suffix.lower()
-    if suffix == ".cif":
+    path = Path(filename)
+    if path.suffix.lower() == ".cif":
         return ["cif"]
+    stem_hint = _VASP_STEM_HINTS.get(path.stem.upper())
+    if stem_hint:
+        return list(stem_hint)
     return []
 
 

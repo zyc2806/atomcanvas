@@ -143,3 +143,45 @@ def test_export_full_trajectory_to_static_has_truncated_warning(client: TestClie
     warnings_raw = response.headers.get("x-export-warnings", "[]")
     warnings = json.loads(warnings_raw)
     assert any(w.get("code") == "TRAJECTORY_TRUNCATED" for w in warnings)
+
+
+def test_export_vasp_xdatcar_canonical_key_periodic_downloads_file(client: TestClient) -> None:
+    """Exporting with format='vasp-xdatcar' (canonical ASE format) on a periodic
+    structure must return 200 and a .xdatcar in content-disposition.
+
+    Regression: previously xdatcar had no ase_write_format alias so
+    ase.io.write(format='xdatcar') raised UnknownFileTypeError → 500.
+    """
+    payload = {
+        "format": "vasp-xdatcar",
+        "scope": "current_frame",
+        "structure": _make_structure(periodic=True),
+        "structure_version": 10,
+    }
+
+    response = client.post("/api/structure/export", json=payload)
+
+    assert response.status_code == 200
+    content_disposition = response.headers.get("content-disposition", "")
+    assert ".xdatcar" in content_disposition
+
+
+def test_export_xdatcar_bare_key_periodic_downloads_file(client: TestClient) -> None:
+    """Exporting with format='xdatcar' (the bare registry key) on a periodic
+    structure must also return 200 now that the registry alias is in place.
+
+    This test directly proves the landmine is gone: before the fix, the bare key
+    'xdatcar' resolved to itself → UnknownFileTypeError in ase.io.write → 500.
+    """
+    payload = {
+        "format": "xdatcar",
+        "scope": "current_frame",
+        "structure": _make_structure(periodic=True),
+        "structure_version": 11,
+    }
+
+    response = client.post("/api/structure/export", json=payload)
+
+    assert response.status_code == 200
+    content_disposition = response.headers.get("content-disposition", "")
+    assert ".xdatcar" in content_disposition

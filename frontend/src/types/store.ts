@@ -80,6 +80,7 @@ export interface Visualization {
 export interface StandardStructureObject {
     structure: Structure;
     visualization: Visualization;
+    trajectory?: Structure[];
 }
 
 export interface ViewControls {

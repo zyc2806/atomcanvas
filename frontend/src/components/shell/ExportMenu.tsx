@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import {
   Button,
   Menu,
@@ -12,9 +12,13 @@ import {
   DialogContent,
   DialogActions,
   FormControl,
+  FormLabel,
   InputLabel,
   Select,
   MenuItem as SelectItem,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -30,13 +34,18 @@ import {
 import { downloadBlob, uniqueName } from '../../services/download';
 import { parseDocument, applySceneDocument, applyStylePreset } from '../../services/sceneDocument';
 import { structureService, buildExportPayload } from '../../services/structureService';
+import type { ExportScope } from '../../services/structureService';
 
 const STRUCTURE_FORMATS = [
-  { value: 'cif', label: 'CIF (.cif)' },
-  { value: 'vasp', label: 'POSCAR (VASP)' },
-  { value: 'xyz', label: 'XYZ (.xyz)' },
-  { value: 'extxyz', label: 'Extended XYZ (.extxyz)' },
-  { value: 'pdb', label: 'PDB (.pdb)' },
+  { value: 'xyz', label: 'XYZ (.xyz)', supportsMultipleFrames: false },
+  { value: 'extxyz', label: 'Extended XYZ (.extxyz)', supportsMultipleFrames: true },
+  { value: 'cif', label: 'CIF (.cif)', supportsMultipleFrames: true },
+  { value: 'vasp', label: 'POSCAR (VASP)', supportsMultipleFrames: false },
+  { value: 'vasp-xdatcar', label: 'XDATCAR (VASP)', supportsMultipleFrames: true },
+  { value: 'traj', label: 'ASE Trajectory (.traj)', supportsMultipleFrames: true },
+  { value: 'json', label: 'ASE JSON (.json)', supportsMultipleFrames: true },
+  { value: 'pdb', label: 'PDB (.pdb)', supportsMultipleFrames: false },
+  { value: 'cube', label: 'Gaussian Cube (.cube)', supportsMultipleFrames: false },
 ];
 
 interface ToastState {
@@ -48,11 +57,29 @@ export function ExportMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [formatDialogOpen, setFormatDialogOpen] = useState(false);
-  const [format, setFormat] = useState('cif');
+  const [format, setFormat] = useState('extxyz');
+  const [scope, setScope] = useState<ExportScope>('current_frame');
   const importRef = useRef<HTMLInputElement>(null);
 
   const hasStructure = useStructureStore((s) => s.structureData !== null);
+  const hasTrajectory = useStructureStore((s) => (s.structureData?.trajectory?.length ?? 0) > 1);
   const tabCount = useStructureStore((s) => s.tabs.length);
+
+  const availableFormats = useMemo(
+    () =>
+      scope === 'full_trajectory'
+        ? STRUCTURE_FORMATS.filter((f) => f.supportsMultipleFrames)
+        : STRUCTURE_FORMATS,
+    [scope],
+  );
+
+  const selectedFormat = useMemo(
+    () =>
+      availableFormats.some((f) => f.value === format)
+        ? format
+        : (availableFormats[0]?.value ?? 'xyz'),
+    [availableFormats, format],
+  );
 
   const open = Boolean(anchorEl);
   const close = () => setAnchorEl(null);
@@ -67,6 +94,7 @@ export function ExportMenu() {
   };
 
   const onExportStructure = run(() => {
+    setScope('current_frame');
     setFormatDialogOpen(true);
   }, 'Structure export');
 
@@ -77,13 +105,13 @@ export function ExportMenu() {
     try {
       const payload = buildExportPayload({
         structureData: s.structureData,
-        scope: 'current_frame',
-        format,
+        scope,
+        format: selectedFormat,
         structureVersion: 1,
       });
       const result = await structureService.exportStructure(payload);
       const tabName = s.tabs.find((t) => t.id === s.activeTabId)?.name ?? 'structure';
-      const filename = result.filename ?? uniqueName(tabName, format);
+      const filename = result.filename ?? uniqueName(tabName, selectedFormat);
       downloadBlob(result.blob, filename, 'application/octet-stream');
       if (result.warnings.length > 0) {
         setToast({ severity: 'success', message: result.warnings.map((w) => w.message).join('; ') });
@@ -152,7 +180,7 @@ export function ExportMenu() {
           <ListItemText>Batch: all tabs → glb</ListItemText>
         </MenuItem>
         <MenuItem disabled={!hasStructure} onClick={onExportStructure}>
-          <ListItemText>Structure file (CIF/POSCAR/XYZ)…</ListItemText>
+          <ListItemText>Structure file…</ListItemText>
         </MenuItem>
 
         <Divider />
@@ -179,15 +207,36 @@ export function ExportMenu() {
             <Select
               labelId="export-format-label"
               label="Format"
-              value={format}
+              value={selectedFormat}
               onChange={(e: SelectChangeEvent) => setFormat(e.target.value)}
             >
-              {STRUCTURE_FORMATS.map((f) => (
+              {availableFormats.map((f) => (
                 <SelectItem key={f.value} value={f.value}>
                   {f.label}
                 </SelectItem>
               ))}
             </Select>
+          </FormControl>
+
+          <FormControl component="fieldset" sx={{ mt: 2 }}>
+            <FormLabel component="legend" id="export-scope-label">Scope</FormLabel>
+            <RadioGroup
+              aria-labelledby="export-scope-label"
+              value={scope}
+              onChange={(e) => setScope(e.target.value as ExportScope)}
+            >
+              <FormControlLabel
+                value="current_frame"
+                control={<Radio />}
+                label="Current frame"
+              />
+              <FormControlLabel
+                value="full_trajectory"
+                control={<Radio />}
+                label="Full trajectory"
+                disabled={!hasTrajectory}
+              />
+            </RadioGroup>
           </FormControl>
         </DialogContent>
         <DialogActions>

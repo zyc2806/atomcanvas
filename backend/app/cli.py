@@ -30,17 +30,19 @@ from .services.export_ops import export_atoms_to_file
 from .services.geometry import get_bonds_and_ghosts
 from .services.selection_parser import parse_selection_expression, get_selection_ast
 
-# Map output extensions to the ASE format passed to write. Only formats the
-# export pipeline can actually round-trip are listed: PDB is deliberately absent
-# because the capability registry keys it 'pdb' while ase.io.write only accepts
-# 'proteindatabank', so neither spelling writes successfully. VASP output needs a
-# '.vasp' extension (the export service rejects extensionless paths like POSCAR).
+# Map output extensions to the registry format name passed to export_atoms_to_file.
+# The export service resolves each name to the correct ase.io.write format string
+# (e.g. 'pdb' -> 'proteindatabank') via resolve_ase_write_format, so the registry
+# name is what goes here — not the ASE internal name.
+# VASP output needs a '.vasp' extension (the export service rejects extensionless
+# paths like POSCAR).  '.mol' is deliberately absent because ASE has no mol writer.
 _EXT_TO_FORMAT = {
     ".cif": "cif",
     ".xyz": "xyz",
     ".extxyz": "extxyz",
     ".vasp": "vasp",
     ".traj": "traj",
+    ".pdb": "pdb",
 }
 
 

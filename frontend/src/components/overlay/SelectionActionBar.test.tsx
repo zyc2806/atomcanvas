@@ -33,4 +33,22 @@ describe('SelectionActionBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /clear/i }));
     expect(useStructureStore.getState().selectedAtoms).toEqual([]);
   });
+
+  it('colour control opens a hex picker (matches the sidebar), not preset swatches', () => {
+    useStructureStore.setState({ selectedAtoms: [0, 1] });
+    render(<SelectionActionBar />);
+    // The old fixed preset swatches (aria-label "color #rrggbb") are gone.
+    expect(screen.queryByLabelText(/^color #/i)).toBeNull();
+    fireEvent.click(screen.getByTestId('selection-color'));
+    expect(document.querySelector('.react-colorful')).not.toBeNull();
+  });
+
+  it('colour swatch reflects the first selected atom colour override', () => {
+    useStructureStore.setState({ selectedAtoms: [0, 1], colorOverrides: { 0: '#123456' } });
+    render(<SelectionActionBar />);
+    // jsdom normalises the hex background to rgb().
+    expect(screen.getByTestId('selection-color')).toHaveStyle({
+      backgroundColor: 'rgb(18, 52, 86)',
+    });
+  });
 });

@@ -7,7 +7,7 @@ import {
     clipGhostBondFromAtomToBoundary,
     clipBondToAtomSurfaces,
     getBondRadiusScale,
-    getBondSurfaceTrim,
+    getOpacityAwareBondTrim,
     getRenderedAtomRadius as getModeAdjustedAtomRadius,
 } from '../../utils/bondUtils';
 import useAtomColors from '../../hooks/useAtomColors';
@@ -102,6 +102,15 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
             const atomicNumber = getAtomicNumber(symbol);
             const elementRadius = radiiData[atomicNumber] || 0.5;
             return getModeAdjustedAtomRadius(elementRadius, atomScale, displayMode, radiusOverrides?.[atomIndex] ?? 1);
+        };
+
+        // Whether an endpoint atom is rendered transparently. Drives the
+        // opacity-aware bond trim: opaque atoms hide the inner cap so the bond
+        // runs to the center (no protrusion), transparent atoms keep the surface
+        // trim. Mirrors the per-mode opacity used by Atoms.tsx.
+        const isAtomTransparent = (atomIndex: number): boolean => {
+            const op = renderStyle === 'cartoon' ? getAtomBaseOpacity() : getAtomOpacity(atomIndex);
+            return isOpacityTransparent(op);
         };
 
         const adjacency: Record<number, number[]> = {};
@@ -253,8 +262,8 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
                 const clipped = clipBondToAtomSurfaces(
                     [sx, sy, sz],
                     [ex, ey, ez],
-                    getBondSurfaceTrim(startAtomRadius, offsetLengthSq, displayMode),
-                    getBondSurfaceTrim(endAtomRadius, offsetLengthSq, displayMode),
+                    getOpacityAwareBondTrim(startAtomRadius, offsetLengthSq, displayMode, isAtomTransparent(idx1)),
+                    getOpacityAwareBondTrim(endAtomRadius, offsetLengthSq, displayMode, isAtomTransparent(idx2)),
                     MIN_CLIPPED_BOND_LENGTH
                 );
                 if (!clipped) continue;
@@ -371,7 +380,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
                 const clipped = clipGhostBondFromAtomToBoundary(
                     [s.x, s.y, s.z],
                     [e.x, e.y, e.z],
-                    getBondSurfaceTrim(startAtomRadius, offsetLengthSq, displayMode),
+                    getOpacityAwareBondTrim(startAtomRadius, offsetLengthSq, displayMode, isAtomTransparent(atomIdx)),
                     MIN_CLIPPED_BOND_LENGTH
                 );
                 if (!clipped) continue;

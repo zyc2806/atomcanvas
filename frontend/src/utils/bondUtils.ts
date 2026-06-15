@@ -73,6 +73,28 @@ export const getBondSurfaceTrim = (
 };
 
 /**
+ * Opacity-aware bond-half trim (issue #5).
+ *
+ * An OPAQUE endpoint atom buries the bond half's flat cap inside its solid
+ * sphere, so the half runs all the way to the atom *center* (trim 0). This
+ * removes the cap from the curved surface entirely, fixing the "ball stuck on
+ * cylinder" protrusion that appears when a thick bond is surface-trimmed against
+ * a smaller atom.
+ *
+ * A TRANSPARENT (glass) endpoint cannot hide the cap, so we keep the original
+ * surface trim — otherwise the cylinder would visibly pass through the sphere.
+ */
+export const getOpacityAwareBondTrim = (
+    atomRadius: number,
+    offsetLengthSq: number,
+    displayMode: 'ball-stick' | 'vdw' | 'wireframe',
+    isTransparent: boolean
+): number => {
+    if (!isTransparent) return 0;
+    return getBondSurfaceTrim(atomRadius, offsetLengthSq, displayMode);
+};
+
+/**
  * Clips a bond segment so it starts/ends at atom surfaces rather than atom centers.
  * Returns null when the clipped segment is too short to render reliably.
  */

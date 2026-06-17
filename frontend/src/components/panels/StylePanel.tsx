@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Box,
   Button,
@@ -40,6 +40,9 @@ export function StylePanel() {
   const bondRadius = useStructureStore((s) => s.visParams.bondRadius);
   const setVisParams = useStructureStore((s) => s.setVisParams);
 
+  const displayMode = useStructureStore((s) => s.visParams.displayMode);
+  const setDisplayMode = useStructureStore((s) => s.setDisplayMode);
+
   const sceneSettings = useStructureStore((s) => s.sceneSettings);
   const setBackground = useStructureStore((s) => s.setBackground);
   const setGlobalBrightness = useStructureStore((s) => s.setGlobalBrightness);
@@ -59,6 +62,10 @@ export function StylePanel() {
   const perAtomOpacityOverrides = useStructureStore((s) => s.perAtomOpacityOverrides);
   const applySelectionColor = useStructureStore((s) => s.applySelectionColor);
   const applySelectionSize = useStructureStore((s) => s.applySelectionSize);
+  const pushHistory = useStructureStore((s) => s.pushHistory);
+
+  // One undo frame per slider drag: snapshot on the first onChange, reset on commit.
+  const sizeGestureRef = useRef(false);
 
   const symbols = useMemo<string[]>(
     () => structureData?.structure.symbols ?? [],
@@ -122,6 +129,23 @@ export function StylePanel() {
       <Typography variant="subtitle1" gutterBottom>
         Style
       </Typography>
+
+      <Typography variant="subtitle2" gutterBottom>
+        Display mode
+      </Typography>
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={displayMode}
+        onChange={(_, mode) => {
+          if (mode) setDisplayMode(mode);
+        }}
+        sx={{ mb: 2 }}
+      >
+        <ToggleButton value="ball-stick">{'Ball & stick'}</ToggleButton>
+        <ToggleButton value="vdw">vdW</ToggleButton>
+        <ToggleButton value="wireframe">Wireframe</ToggleButton>
+      </ToggleButtonGroup>
 
       <Table size="small" aria-label="element styles">
         <TableHead>
@@ -206,6 +230,7 @@ export function StylePanel() {
                 DEFAULT_ATOM_COLOR
               }
               onChange={handleSelectedColor}
+              onPickStart={() => pushHistory()}
               testId="selected-color"
             />
           </Stack>
@@ -219,7 +244,16 @@ export function StylePanel() {
               max={2.0}
               step={0.05}
               value={radiusOverrides?.[selectedAtoms[0]] ?? 1.0}
-              onChange={(_, v) => handleSelectedSize(v as number)}
+              onChange={(_, v) => {
+                if (!sizeGestureRef.current) {
+                  pushHistory();
+                  sizeGestureRef.current = true;
+                }
+                handleSelectedSize(v as number);
+              }}
+              onChangeCommitted={() => {
+                sizeGestureRef.current = false;
+              }}
               aria-label="selected-size"
               slotProps={{ input: { 'data-testid': 'selected-size' } as never }}
               sx={{ flex: 1 }}

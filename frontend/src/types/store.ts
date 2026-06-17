@@ -244,6 +244,7 @@ export interface HistorySnapshot {
     perAtomColorOverrides: { [index: number]: string } | null;
     perAtomOpacityOverrides: { [index: number]: number } | null;
     atomStyles: { [symbol: string]: { color: string; radius: number } } | null;
+    topologyOverrides: Record<string, string>;
 }
 
 export interface HistorySlice {

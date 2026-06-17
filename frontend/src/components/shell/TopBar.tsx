@@ -1,11 +1,14 @@
 import { useRef } from 'react';
-import { AppBar, Toolbar, Button, Box, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Button, Box, IconButton, Tooltip, Typography } from '@mui/material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import LinkIcon from '@mui/icons-material/Link';
 import TuneIcon from '@mui/icons-material/Tune';
 import HighlightAltIcon from '@mui/icons-material/HighlightAlt';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
 import { StructureTabs } from './StructureTabs';
 import { ExportMenu } from './ExportMenu';
+import { useStructureStore } from '../../store/useStructureStore';
 import type { ActivePanel } from './PanelHost';
 
 interface TopBarProps {
@@ -17,9 +20,21 @@ interface TopBarProps {
 export function TopBar({ activePanel, onTogglePanel, onOpenFiles }: TopBarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const undo = useStructureStore((s) => s.undo);
+  const redo = useStructureStore((s) => s.redo);
+  const canUndo = useStructureStore((s) => s.past.length > 0);
+  const canRedo = useStructureStore((s) => s.future.length > 0);
+
   return (
     <AppBar position="fixed" color="default" elevation={1} sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
       <Toolbar variant="dense" sx={{ gap: 1 }}>
+        <Typography
+          variant="subtitle1"
+          component="div"
+          sx={{ fontWeight: 700, mr: 1, userSelect: 'none' }}
+        >
+          AtomCanvas
+        </Typography>
         <Button
           size="small"
           variant="outlined"
@@ -35,6 +50,31 @@ export function TopBar({ activePanel, onTogglePanel, onOpenFiles }: TopBarProps)
           data-testid="file-input"
           onChange={(e) => onOpenFiles(e.target.files)}
         />
+
+        <Tooltip title="Undo (⌘Z)">
+          <span>
+            <IconButton
+              size="small"
+              aria-label="undo"
+              disabled={!canUndo}
+              onClick={() => undo()}
+            >
+              <UndoIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Redo (⌘⇧Z)">
+          <span>
+            <IconButton
+              size="small"
+              aria-label="redo"
+              disabled={!canRedo}
+              onClick={() => redo()}
+            >
+              <RedoIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
 
         <StructureTabs />
 

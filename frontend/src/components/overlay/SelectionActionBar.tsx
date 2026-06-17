@@ -21,6 +21,7 @@ export function SelectionActionBar() {
   const toggleSelectionHidden = useStructureStore((s) => s.toggleSelectionHidden);
   const clearSelection = useStructureStore((s) => s.clearSelection);
   const notify = useStructureStore((s) => s.notify);
+  const pushHistory = useStructureStore((s) => s.pushHistory);
   const { setBondsOrder, deleteBonds, setBondsOpacity } = useBondEdits();
 
   const [bondOrder, setBondOrder] = useState<BondOrder>('1.0');
@@ -45,6 +46,8 @@ export function SelectionActionBar() {
   };
   const bumpSize = (delta: number) => {
     const next = Math.max(0.2, Math.min(3, +(currentScale() + delta).toFixed(2)));
+    // Discrete click → one undo frame (applySelectionSize no longer self-snapshots).
+    pushHistory();
     applySelectionSize(selectedAtoms, next);
     notify(`Resized ${nAtoms} atom${nAtoms > 1 ? 's' : ''}`);
   };
@@ -79,6 +82,7 @@ export function SelectionActionBar() {
               <ColorSwatch
                 color={colorOverrides?.[selectedAtoms[0]] ?? '#ffffff'}
                 onChange={(c) => applySelectionColor(selectedAtoms, c)}
+                onPickStart={() => pushHistory()}
                 size={18}
                 testId="selection-color"
               />

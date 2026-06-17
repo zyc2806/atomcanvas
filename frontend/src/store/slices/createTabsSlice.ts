@@ -31,6 +31,10 @@ export const createTabsSlice: StateCreator<StructureState, [], [], TabsSlice> = 
       perAtomOpacityOverrides: null,
       selectedAtoms: [],
       selectedBonds: [],
+      // Undo history is per active-structure session; a new tab starts clean so
+      // undo can never cross a structure boundary and corrupt another tab.
+      past: [],
+      future: [],
     }));
     get().setStructureData(doc);
     return id;
@@ -51,6 +55,9 @@ export const createTabsSlice: StateCreator<StructureState, [], [], TabsSlice> = 
       perAtomOpacityOverrides: target.perAtomOpacityOverrides ? { ...target.perAtomOpacityOverrides } : null,
       selectedAtoms: [],
       selectedBonds: [],
+      // Switching structures resets the undo stack (see addTab).
+      past: [],
+      future: [],
     });
     get().setStructureData(target.doc);
   },
@@ -62,8 +69,13 @@ export const createTabsSlice: StateCreator<StructureState, [], [], TabsSlice> = 
     const tabs = s.tabs.filter(t => t.id !== id);
     if (id !== s.activeTabId) { set({ tabs }); return; }
     const next = tabs[Math.max(0, idx - 1)] ?? null;
-    set({ tabs, activeTabId: next?.id ?? null, topologyOverrides: next ? { ...next.bondOverrides } : {} });
+    // Drop the closed structure's undo history (it belongs to the structure, not
+    // the app); the neighbor we activate starts a fresh stack.
+    set({ tabs, activeTabId: next?.id ?? null, topologyOverrides: next ? { ...next.bondOverrides } : {}, past: [], future: [] });
+    // Restore the neighbor's structure, or clear everything when the last tab
+    // is gone so the canvas empties and the onboarding empty-state reappears.
     if (next) get().setStructureData(next.doc);
+    else get().clearStructure();
   },
 
   renameTab: (id, name) => set((s) => ({ tabs: s.tabs.map(t => (t.id === id ? { ...t, name } : t)) })),

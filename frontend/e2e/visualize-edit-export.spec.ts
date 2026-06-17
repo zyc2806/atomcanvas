@@ -17,18 +17,17 @@ test('upload → render → delete bond → export scene.json', async ({ page })
   await expect(page.locator('canvas').first()).toBeVisible();
   await expect(page.getByText('water', { exact: true }).first()).toBeVisible();
 
-  // Open the bonds panel.
+  // Select the O1-H1 bonded pair via the Selection panel's "Label" method.
+  await page.locator('[aria-label="toggle selection panel"]').click();
+  await page.getByRole('button', { name: 'Label' }).click();
+  await page.getByRole('textbox', { name: /labels/i }).fill('O1,H1');
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await expect(page.getByText(/2 atoms selected/i)).toBeVisible();
+
+  // Open the bonds panel. With exactly two atoms selected, Delete bond enables.
+  // Scope to the side panel — the floating action bar also has a delete-bond button.
   await page.locator('[aria-label="toggle bonds panel"]').click();
-
-  // The selection expression input is a MUI Autocomplete -> role "combobox".
-  // Select the O-H1 bonded pair, then apply with Enter.
-  const selection = page.getByRole('combobox', { name: /selection/i });
-  await expect(selection).toBeVisible();
-  await selection.fill('label:O1,H1');
-  await selection.press('Enter');
-
-  // With exactly two atoms selected, the Delete bond button is enabled.
-  const deleteBond = page.getByRole('button', { name: /delete bond/i });
+  const deleteBond = page.locator('.MuiDrawer-paper').getByRole('button', { name: /delete bond/i });
   await expect(deleteBond).toBeEnabled();
   await deleteBond.click();
 

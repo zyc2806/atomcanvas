@@ -146,3 +146,128 @@ describe('createHistorySlice', () => {
     expect(result.current.visParams.displayMode).toBe('vdw');
   });
 });
+
+describe('edit actions and history', () => {
+  const data = {
+    structure: {
+      symbols: ['H', 'H'],
+      positions: [[0, 0, 0], [1, 0, 0]],
+      cell: [[10, 0, 0], [0, 10, 0], [0, 0, 10]],
+      pbc: [true, true, true],
+    },
+    visualization: { bonds: [], h_bond_geometries: [], unwrapped_h_bonds: [], wrapped_ghost_bonds: [] },
+  };
+
+  beforeEach(() => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => {
+      result.current.setStructureData(data as never);
+      useStructureStore.setState({
+        past: [],
+        future: [],
+        colorOverrides: null,
+        opacityOverrides: null,
+        radiusOverrides: null,
+        perAtomColorOverrides: null,
+        perAtomOpacityOverrides: null,
+        topologyOverrides: {},
+      });
+    });
+  });
+
+  it('toggleSelectionHidden snapshots history and undo reverts both opacity channels', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => { result.current.toggleSelectionHidden([0]); });
+    expect(result.current.past.length).toBe(1);
+    expect(result.current.opacityOverrides).toEqual({ 0: 0 });
+    expect(result.current.perAtomOpacityOverrides).toEqual({ 0: 0 });
+    act(() => { result.current.undo(); });
+    expect(result.current.opacityOverrides).toBeNull();
+    expect(result.current.perAtomOpacityOverrides).toBeNull();
+  });
+
+  it('does not snapshot history for an empty selection', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => { result.current.toggleSelectionHidden([]); });
+    expect(result.current.past.length).toBe(0);
+  });
+
+  it('applySelectionColor/Size are live mutations that do NOT snapshot history themselves', () => {
+    // Continuous controls (color picker / size slider) snapshot ONCE at the UI
+    // gesture boundary, not on every tick — so the store actions must not push.
+    const { result } = renderHook(() => useStructureStore());
+    act(() => {
+      result.current.applySelectionColor([0], '#ff0000');
+      result.current.applySelectionColor([0], '#00ff00');
+      result.current.applySelectionSize([0], 1.5);
+    });
+    expect(result.current.past.length).toBe(0);
+  });
+
+  it('one color gesture (push once, then live changes) is a single undo reverting both channels', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => {
+      result.current.pushHistory();                        // UI snapshots once on gesture start
+      result.current.applySelectionColor([0], '#ff0000');  // then the picker drags
+      result.current.applySelectionColor([0], '#00ff00');
+    });
+    expect(result.current.past.length).toBe(1);
+    expect(result.current.colorOverrides).toEqual({ 0: '#00ff00' });
+    expect(result.current.perAtomColorOverrides).toEqual({ 0: '#00ff00' });
+    act(() => { result.current.undo(); });
+    expect(result.current.colorOverrides).toBeNull();
+    expect(result.current.perAtomColorOverrides).toBeNull();
+  });
+
+  it('one size gesture is a single undo reverting radiusOverrides', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => {
+      result.current.pushHistory();
+      result.current.applySelectionSize([0], 1.2);
+      result.current.applySelectionSize([0], 1.8);
+    });
+    expect(result.current.past.length).toBe(1);
+    expect(result.current.radiusOverrides).toEqual({ 0: 1.8 });
+    act(() => { result.current.undo(); });
+    expect(result.current.radiusOverrides).toBeNull();
+  });
+
+  it('captures and restores topologyOverrides through undo', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => { useStructureStore.setState({ topologyOverrides: { '0-1': '1.0' } }); });
+    act(() => { result.current.pushHistory(); });
+    act(() => { useStructureStore.setState({ topologyOverrides: { '0-1': 'delete' } }); });
+    act(() => { result.current.undo(); });
+    expect(result.current.topologyOverrides).toEqual({ '0-1': '1.0' });
+  });
+
+  it('invalidates the redo stack when a new edit is made after an undo', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => { result.current.pushHistory(); result.current.setColorOverrides({ 0: '#ff0000' }); });
+    act(() => { result.current.undo(); });
+    expect(result.current.future.length).toBe(1);
+    // A fresh edit clears the redo stack...
+    act(() => { result.current.pushHistory(); });
+    expect(result.current.future.length).toBe(0);
+    // ...and redo is then a no-op.
+    act(() => { result.current.redo(); });
+    expect(result.current.future.length).toBe(0);
+  });
+
+  it('undoes and redoes multiple frames in LIFO order', () => {
+    const { result } = renderHook(() => useStructureStore());
+    act(() => { result.current.pushHistory(); result.current.setColorOverrides({ 0: '#ff0000' }); });
+    act(() => { result.current.pushHistory(); result.current.setColorOverrides({ 0: '#00ff00' }); });
+    expect(result.current.colorOverrides).toEqual({ 0: '#00ff00' });
+
+    act(() => { result.current.undo(); });
+    expect(result.current.colorOverrides).toEqual({ 0: '#ff0000' });
+    act(() => { result.current.undo(); });
+    expect(result.current.colorOverrides).toBeNull();
+
+    act(() => { result.current.redo(); });
+    expect(result.current.colorOverrides).toEqual({ 0: '#ff0000' });
+    act(() => { result.current.redo(); });
+    expect(result.current.colorOverrides).toEqual({ 0: '#00ff00' });
+  });
+});

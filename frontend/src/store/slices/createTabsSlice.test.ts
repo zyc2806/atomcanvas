@@ -61,4 +61,53 @@ describe('tabs slice', () => {
     useStructureStore.getState().closeTab(useStructureStore.getState().activeTabId!);
     expect(useStructureStore.getState().activeTabId).toBe(a);
   });
+
+  it('clears structureData when the last tab is closed', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    expect(useStructureStore.getState().structureData).not.toBeNull();
+    useStructureStore.getState().closeTab(id);
+    const s = useStructureStore.getState();
+    expect(s.tabs).toHaveLength(0);
+    expect(s.activeTabId).toBeNull();
+    expect(s.structureData).toBeNull();
+  });
+
+  // Undo history is per active-structure session: it must reset at every tab
+  // boundary so undo can never cross structures and corrupt another tab.
+  it('opening a new tab clears the undo history', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('switching tabs clears the undo history (no cross-tab undo)', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('closing the last tab clears the undo history (no resurrection on reopen)', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().closeTab(id);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('closing a tab to a neighbor clears the undo history', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().closeTab(b);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+  });
 });

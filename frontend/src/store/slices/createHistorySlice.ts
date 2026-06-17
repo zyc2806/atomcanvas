@@ -21,6 +21,7 @@ const createSnapshot = (state: StructureState): HistorySnapshot => ({
     perAtomColorOverrides: state.perAtomColorOverrides ? { ...state.perAtomColorOverrides } : null,
     perAtomOpacityOverrides: state.perAtomOpacityOverrides ? { ...state.perAtomOpacityOverrides } : null,
     atomStyles: state.atomStyles ? { ...state.atomStyles } : null,
+    topologyOverrides: { ...state.topologyOverrides },
 });
 
 export const createHistorySlice: StateCreator<StructureState, [], [], HistorySlice> = (set, get) => ({
@@ -64,6 +65,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                     perAtomColorOverrides: previous.perAtomColorOverrides,
                     perAtomOpacityOverrides: previous.perAtomOpacityOverrides,
                     atomStyles: previous.atomStyles,
+                    topologyOverrides: previous.topologyOverrides,
                 };
         });
     },
@@ -105,6 +107,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
                     perAtomColorOverrides: next.perAtomColorOverrides,
                     perAtomOpacityOverrides: next.perAtomOpacityOverrides,
                     atomStyles: next.atomStyles,
+                    topologyOverrides: next.topologyOverrides,
                 };
         });
     },
@@ -130,6 +133,7 @@ export const createHistorySlice: StateCreator<StructureState, [], [], HistorySli
             perAtomColorOverrides: snapshot?.perAtomColorOverrides !== undefined ? snapshot.perAtomColorOverrides : (state.perAtomColorOverrides ? { ...state.perAtomColorOverrides } : null),
             perAtomOpacityOverrides: snapshot?.perAtomOpacityOverrides !== undefined ? snapshot.perAtomOpacityOverrides : (state.perAtomOpacityOverrides ? { ...state.perAtomOpacityOverrides } : null),
             atomStyles: snapshot?.atomStyles !== undefined ? snapshot.atomStyles : (state.atomStyles ? { ...state.atomStyles } : null),
+            topologyOverrides: snapshot?.topologyOverrides ?? { ...state.topologyOverrides },
         };
 
         if (!fullSnapshot.structure) {

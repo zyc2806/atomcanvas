@@ -188,7 +188,11 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         cameraApplyRevision: state.cameraApplyRevision + 1,
     })),
 
-    setDisplayMode: (mode) => set((state) => {
+    setDisplayMode: (mode) => {
+        // Display modes overwrite atomScale/bondRadius/showBonds presets, so make
+        // the change undoable rather than silently clobbering tuned values.
+        get().pushHistory();
+        set((state) => {
         let newParams: Partial<VisualizationParams> = { displayMode: mode };
         let newViewControls: Partial<ViewControls> = {};
 
@@ -217,7 +221,8 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
             visParams: { ...state.visParams, ...newParams },
             viewControls: { ...state.viewControls, ...newViewControls }
         };
-    }),
+        });
+    },
 
     setShowHBonds: (show) => set((state) => ({
         visParams: { ...state.visParams, showHBonds: show }
@@ -237,33 +242,43 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
     setColorOverrides: (overrides) => set({ colorOverrides: overrides }),
     setOpacityOverrides: (overrides) => set({ opacityOverrides: overrides }),
     setRadiusOverrides: (overrides) => set({ radiusOverrides: overrides }),
-    applySelectionColor: (indices, color) => set((state) => {
-        if (indices.length === 0) return {};
-        const perAtom = { ...(state.perAtomColorOverrides ?? {}) };
-        const visible = { ...(state.colorOverrides ?? {}) };
-        indices.forEach((i) => { perAtom[i] = color; visible[i] = color; });
-        return { perAtomColorOverrides: perAtom, colorOverrides: visible };
-    }),
-    applySelectionSize: (indices, scale) => set((state) => {
-        if (indices.length === 0) return {};
-        const next = { ...(state.radiusOverrides ?? {}) };
-        indices.forEach((i) => { next[i] = scale; });
-        return { radiusOverrides: next };
-    }),
-    toggleSelectionHidden: (indices) => set((state) => {
-        if (indices.length === 0) return {};
-        const perAtom = { ...(state.perAtomOpacityOverrides ?? {}) };
-        const visible = { ...(state.opacityOverrides ?? {}) };
-        const allHidden = indices.every((i) => perAtom[i] === 0);
-        indices.forEach((i) => {
-            if (allHidden) { delete perAtom[i]; delete visible[i]; }
-            else { perAtom[i] = 0; visible[i] = 0; }
+    // Live mutations (driven by continuous controls — a color picker dragging or
+    // a size slider). They do NOT snapshot history themselves; the UI pushes one
+    // frame at the gesture boundary so a whole drag is a single undo step.
+    applySelectionColor: (indices, color) => {
+        if (indices.length === 0) return;
+        set((state) => {
+            const perAtom = { ...(state.perAtomColorOverrides ?? {}) };
+            const visible = { ...(state.colorOverrides ?? {}) };
+            indices.forEach((i) => { perAtom[i] = color; visible[i] = color; });
+            return { perAtomColorOverrides: perAtom, colorOverrides: visible };
         });
-        return {
-            perAtomOpacityOverrides: Object.keys(perAtom).length ? perAtom : null,
-            opacityOverrides: Object.keys(visible).length ? visible : null,
-        };
-    }),
+    },
+    applySelectionSize: (indices, scale) => {
+        if (indices.length === 0) return;
+        set((state) => {
+            const next = { ...(state.radiusOverrides ?? {}) };
+            indices.forEach((i) => { next[i] = scale; });
+            return { radiusOverrides: next };
+        });
+    },
+    toggleSelectionHidden: (indices) => {
+        if (indices.length === 0) return;
+        get().pushHistory();
+        set((state) => {
+            const perAtom = { ...(state.perAtomOpacityOverrides ?? {}) };
+            const visible = { ...(state.opacityOverrides ?? {}) };
+            const allHidden = indices.every((i) => perAtom[i] === 0);
+            indices.forEach((i) => {
+                if (allHidden) { delete perAtom[i]; delete visible[i]; }
+                else { perAtom[i] = 0; visible[i] = 0; }
+            });
+            return {
+                perAtomOpacityOverrides: Object.keys(perAtom).length ? perAtom : null,
+                opacityOverrides: Object.keys(visible).length ? visible : null,
+            };
+        });
+    },
     setBondOverride: (bondId, color) => set((state) => {
         const currentOverrides = state.bondOverrides || {};
         if (color === null) {

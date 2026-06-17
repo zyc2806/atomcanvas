@@ -107,6 +107,11 @@ export const createDataSlice: StateCreator<StructureState, [], [], DataSlice> = 
             radiusOverrides: null,
             bondOverrides: null,
             slabTarget: null,
+            // Discard undo history with the structure so reopening a file can't
+            // resurrect the closed one on the first undo, and the toolbar
+            // Undo/Redo buttons correctly disable.
+            past: [],
+            future: [],
         });
     },
 });

@@ -127,3 +127,76 @@ describe('StylePanel', () => {
     expect(r?.[2]).toBeCloseTo(1.5);
   });
 });
+
+describe('StylePanel display mode', () => {
+  beforeEach(() => {
+    useStructureStore.getState().setDisplayMode('ball-stick');
+  });
+
+  it('vdW toggle sets displayMode to vdw, scales atoms up and hides bonds', () => {
+    render(<StylePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'vdW' }));
+    const s = useStructureStore.getState();
+    expect(s.visParams.displayMode).toBe('vdw');
+    expect(s.visParams.atomScale).toBeCloseTo(1.0);
+    expect(s.viewControls.showBonds).toBe(false);
+  });
+
+  it('Wireframe toggle sets displayMode to wireframe and keeps bonds shown', () => {
+    render(<StylePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Wireframe' }));
+    const s = useStructureStore.getState();
+    expect(s.visParams.displayMode).toBe('wireframe');
+    expect(s.viewControls.showBonds).toBe(true);
+  });
+
+  it('Ball & stick toggle restores ball-and-stick presets', () => {
+    useStructureStore.getState().setDisplayMode('vdw');
+    render(<StylePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ball & stick' }));
+    const s = useStructureStore.getState();
+    expect(s.visParams.displayMode).toBe('ball-stick');
+    expect(s.visParams.atomScale).toBeCloseTo(0.7);
+    expect(s.visParams.bondRadius).toBeCloseTo(0.08);
+    expect(s.viewControls.showBonds).toBe(true);
+  });
+
+  it('re-clicking the active mode keeps it selected (no null write)', () => {
+    useStructureStore.getState().setDisplayMode('vdw');
+    render(<StylePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'vdW' }));
+    expect(useStructureStore.getState().visParams.displayMode).toBe('vdw');
+  });
+});
+
+const seedTwoSelected = () => {
+  useStructureStore.setState({ tabs: [], activeTabId: null, topologyOverrides: {} });
+  useStructureStore.getState().replacePreset({
+    presetName: 'default',
+    elements: {},
+    bondsStyle: { style: 'cylinder', radius: 0.12, colorMode: 'element-split' },
+  });
+  useStructureStore.getState().addTab(doc(), 'w');
+  useStructureStore.setState({
+    selectedAtoms: [1, 2],
+    radiusOverrides: null,
+    past: [],
+    future: [],
+  });
+};
+
+describe('StylePanel selection-edit history', () => {
+  beforeEach(seedTwoSelected);
+
+  it('snapshots one undo frame when the size slider records a change', () => {
+    // The slider pushes history at the gesture boundary (first onChange) rather
+    // than inside applySelectionSize. jsdom's fireEvent.change is a *committed*
+    // change, so it both pushes and resets the gesture ref → exactly one frame.
+    // (A real pointer drag fires many onChange before onChangeCommitted, which
+    // the ref coalesces into this same single frame.)
+    render(<StylePanel />);
+    fireEvent.change(screen.getByTestId('selected-size'), { target: { value: '1.8' } });
+    expect(useStructureStore.getState().past.length).toBe(1);
+    expect(useStructureStore.getState().radiusOverrides?.[1]).toBeCloseTo(1.8);
+  });
+});

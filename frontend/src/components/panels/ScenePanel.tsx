@@ -5,6 +5,8 @@ import {
   Checkbox,
   Divider,
   FormControlLabel,
+  MenuItem,
+  Select,
   Slider,
   Stack,
   ToggleButton,
@@ -13,7 +15,7 @@ import {
 } from '@mui/material';
 import { useStructureStore } from '../../store/useStructureStore';
 import { refreshTopology } from '../../services/topologyRefresh';
-import type { CartoonParams } from '../../types/store';
+import type { CartoonParams, LightingPreset } from '../../types/store';
 
 type Vec3 = [number, number, number];
 
@@ -55,6 +57,21 @@ const PRESETS: { label: string; offset: Vec3; up: Vec3 }[] = [
   { label: 'Side', offset: [1, 0, 0], up: [0, 1, 0] },
 ];
 
+const LIGHTING_PRESETS: { value: LightingPreset; label: string }[] = [
+  { value: 'studio', label: 'Studio' },
+  { value: 'flat', label: 'Flat' },
+  { value: 'dramatic', label: 'Dramatic' },
+  { value: 'custom', label: 'Custom' },
+];
+
+// Per-light on/off toggles. setLight pins the preset to 'custom' on any change.
+const LIGHTS: { key: 'ambientLight' | 'keyLight' | 'fillLight' | 'rimLight'; label: string }[] = [
+  { key: 'ambientLight', label: 'Ambient' },
+  { key: 'keyLight', label: 'Key' },
+  { key: 'fillLight', label: 'Fill' },
+  { key: 'rimLight', label: 'Rim' },
+];
+
 export function ScenePanel() {
   const structureData = useStructureStore((s) => s.structureData);
   const triggerCameraView = useStructureStore((s) => s.triggerCameraView);
@@ -74,6 +91,11 @@ export function ScenePanel() {
   const renderStyle = useStructureStore((s) => s.visParams.renderStyle);
   const cartoonParams = useStructureStore((s) => s.visParams.cartoonParams);
   const setVisParams = useStructureStore((s) => s.setVisParams);
+
+  const sceneSettings = useStructureStore((s) => s.sceneSettings);
+  const setLightingPreset = useStructureStore((s) => s.setLightingPreset);
+  const setLight = useStructureStore((s) => s.setLight);
+  const toggleLightGizmos = useStructureStore((s) => s.toggleLightGizmos);
 
   const positions = useMemo<Vec3[]>(
     () => structureData?.structure.positions ?? [],
@@ -257,6 +279,56 @@ export function ScenePanel() {
             </Box>
           ))}
         </Box>
+      )}
+
+      <Divider sx={{ my: 2 }} />
+
+      <Typography variant="subtitle2" gutterBottom>
+        Lighting
+      </Typography>
+      <Select
+        size="small"
+        fullWidth
+        value={sceneSettings.lightingPreset}
+        onChange={(e) => setLightingPreset(e.target.value as LightingPreset)}
+        inputProps={{ 'aria-label': 'lighting preset' }}
+        sx={{ mb: 1 }}
+      >
+        {LIGHTING_PRESETS.map(({ value, label }) => (
+          <MenuItem key={value} value={value}>
+            {label}
+          </MenuItem>
+        ))}
+      </Select>
+      <Stack>
+        {LIGHTS.map(({ key, label }) => (
+          <FormControlLabel
+            key={key}
+            control={
+              <Checkbox
+                size="small"
+                checked={sceneSettings[key].enabled}
+                onChange={(e) => setLight(key, { enabled: e.target.checked })}
+              />
+            }
+            label={label}
+          />
+        ))}
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={sceneSettings.showLightGizmos}
+              onChange={() => toggleLightGizmos()}
+            />
+          }
+          label="Light gizmos"
+        />
+      </Stack>
+      {renderStyle === 'cartoon' && (
+        <Typography variant="caption" color="text.secondary">
+          Lighting has no effect in the Cartoon render style.
+        </Typography>
       )}
     </Box>
   );

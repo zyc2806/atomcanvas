@@ -36,6 +36,9 @@ function docForTab(tabId: string): StandardStructureObject {
 // only to the active tab (empty for inactive tabs, never leaked).
 function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
   const renderStyle = s.visParams.renderStyle;
+  // showUnitCell is a global view control (like renderStyle), so it applies to
+  // every tab's export.
+  const showUnitCell = s.viewControls.showUnitCell;
   if (!tabId || tabId === s.activeTabId) {
     return {
       colorOverrides: s.perAtomColorOverrides ?? {},
@@ -43,6 +46,7 @@ function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
       radiusOverrides: s.radiusOverrides ?? {},
       bondOpacityOverrides: s.bondOpacityOverrides ?? {},
       renderStyle,
+      showUnitCell,
     };
   }
   const tab = s.tabs.find((t) => t.id === tabId);
@@ -52,6 +56,7 @@ function overridesForTab(s: StructureState, tabId?: string): ExportOverrides {
     radiusOverrides: tab?.radiusOverrides ?? {},
     bondOpacityOverrides: {},
     renderStyle,
+    showUnitCell,
   };
 }
 
@@ -67,7 +72,7 @@ export function buildSceneForDoc(doc: StandardStructureObject, tabId?: string) {
   // a separate known bug.) Per-atom color/size/opacity, per-bond opacity, and the
   // render style are forwarded so the glb matches the live, edited scene.
   return buildExportScene(
-    { symbols, positions: doc.structure.positions },
+    { symbols, positions: doc.structure.positions, cell: doc.structure.cell },
     { bonds: doc.visualization.bonds, rings: doc.visualization.rings },
     { elements: s.elements, bondsStyle: { ...s.bondsStyle, radius: s.visParams.bondRadius } },
     elementData,

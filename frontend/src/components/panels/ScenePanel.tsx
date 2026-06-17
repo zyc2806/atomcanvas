@@ -62,6 +62,9 @@ export function ScenePanel() {
   const viewControls = useStructureStore((s) => s.viewControls);
   const setViewControls = useStructureStore((s) => s.setViewControls);
 
+  const cameraType = useStructureStore((s) => s.cameraType);
+  const setCameraType = useStructureStore((s) => s.setCameraType);
+
   const showHBonds = useStructureStore((s) => s.visParams.showHBonds);
   const setShowHBonds = useStructureStore((s) => s.setShowHBonds);
 
@@ -127,6 +130,21 @@ export function ScenePanel() {
           </Button>
         ))}
       </Stack>
+
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+        Projection
+      </Typography>
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={cameraType}
+        onChange={(_, value) => {
+          if (value) setCameraType(value);
+        }}
+      >
+        <ToggleButton value="perspective">Perspective</ToggleButton>
+        <ToggleButton value="orthographic">Orthographic</ToggleButton>
+      </ToggleButtonGroup>
 
       <Divider sx={{ my: 2 }} />
 

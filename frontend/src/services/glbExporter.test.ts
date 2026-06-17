@@ -25,6 +25,15 @@ function meshByColor(scene: THREE.Scene, group: string, hex: string): THREE.Mesh
     (m) => (m.material as THREE.MeshStandardMaterial).color.getHexString() === hex,
   );
 }
+// Regression canary: finds any black BackSide inverted-hull outline mesh. The
+// glb no longer bakes these (glTF can't round-trip THREE.BackSide), so this must
+// always return [] — a non-empty result means the black-blob outline came back.
+function outlineMeshes(scene: THREE.Scene, group: string): THREE.Mesh[] {
+  return meshesInGroup(scene, group).filter((m) => {
+    const mat = m.material as THREE.Material;
+    return mat instanceof THREE.MeshBasicMaterial && mat.side === THREE.BackSide;
+  });
+}
 function boundingSphereRadius(mesh: THREE.Mesh): number {
   mesh.geometry.computeBoundingSphere();
   return mesh.geometry.boundingSphere!.radius;
@@ -103,6 +112,53 @@ describe('glbExporter', () => {
     expect((softMesh.material as THREE.MeshStandardMaterial).roughness).toBeCloseTo(1.0, 5);
   });
 
+  it('bakes a nonzero emissive into cartoon materials (flat toon base survives without lights)', () => {
+    const oMesh = meshByColor(
+      buildExportScene(structure, vis, style, elementData, { renderStyle: 'cartoon' }),
+      'atoms',
+      'ff0000',
+    )!;
+    const mat = oMesh.material as THREE.MeshStandardMaterial;
+    expect(mat.emissive.getHex()).not.toBe(0x000000);
+  });
+
+  it('keeps the emissive black for standard and soft', () => {
+    for (const renderStyle of ['standard', 'soft'] as const) {
+      const oMesh = meshByColor(
+        buildExportScene(structure, vis, style, elementData, { renderStyle }),
+        'atoms',
+        'ff0000',
+      )!;
+      expect((oMesh.material as THREE.MeshStandardMaterial).emissive.getHex()).toBe(0x000000);
+    }
+  });
+
+  it('bakes no outline mesh for any render style (glTF cannot round-trip BackSide)', () => {
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'standard' }), 'atoms').length,
+    ).toBe(0);
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'cartoon' }), 'atoms').length,
+    ).toBe(0);
+    expect(
+      outlineMeshes(buildExportScene(structure, vis, style, elementData, { renderStyle: 'soft' }), 'atoms').length,
+    ).toBe(0);
+  });
+
+  it('no BackSide mesh anywhere in the scene for any style or opacity (round-trip regression guard)', () => {
+    for (const renderStyle of ['standard', 'cartoon', 'soft'] as const) {
+      for (const opacityOverrides of [{}, { 0: 0.3 }]) {
+        const scene = buildExportScene(structure, vis, style, elementData, { renderStyle, opacityOverrides });
+        scene.traverse((o) => {
+          const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+          if (mat) {
+            expect(mat.side).not.toBe(THREE.BackSide);
+          }
+        });
+      }
+    }
+  });
+
   it('getElementData builds element data from atomStyles + radii formula', () => {
     const atomStyles = {
       O: { color: '#ff0000', radius: 1.52 },
@@ -149,6 +205,19 @@ function bondsBoundingBox(scene: THREE.Scene): THREE.Box3 {
   const bonds = scene.getObjectByName('bonds')!;
   const box = new THREE.Box3();
   bonds.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) {
+      m.geometry.computeBoundingBox();
+      box.union(m.geometry.boundingBox!);
+    }
+  });
+  return box;
+}
+
+function ringsBoundingBox(scene: THREE.Scene): THREE.Box3 {
+  const rings = scene.getObjectByName('rings')!;
+  const box = new THREE.Box3();
+  rings.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh && m.geometry) {
       m.geometry.computeBoundingBox();
@@ -206,6 +275,83 @@ describe('glbExporter aromatic-ring fidelity', () => {
       colorOverrides: { 0: '#abcdef' },
     });
     expect(meshByColor(scene, 'rings', 'abcdef')).toBeDefined();
+  });
+
+  it('honors the render style on ring materials (roughness; no outline baked for any style)', () => {
+    const ringScene = (renderStyle: 'standard' | 'soft' | 'cartoon') =>
+      buildExportScene(cc, { bonds: [[0, 1, 1]], rings: [ring] }, uniformStyle, ccData, { renderStyle });
+    const ringMat = (scene: THREE.Scene) =>
+      meshesInGroup(scene, 'rings').find(
+        (m) => (m.material as THREE.MeshStandardMaterial).isMeshStandardMaterial,
+      )!.material as THREE.MeshStandardMaterial;
+    expect(ringMat(ringScene('standard')).roughness).toBeCloseTo(0.3, 5);
+    expect(ringMat(ringScene('soft')).roughness).toBeCloseTo(1.0, 5);
+    // No BackSide outline baked for any style — glTF cannot round-trip THREE.BackSide.
+    expect(outlineMeshes(ringScene('standard'), 'rings').length).toBe(0);
+    expect(outlineMeshes(ringScene('cartoon'), 'rings').length).toBe(0);
+    expect(outlineMeshes(ringScene('soft'), 'rings').length).toBe(0);
+  });
+
+  it('scales the ring torus tube with the bond radius (Radius slider)', () => {
+    const sceneWith = (radius: number) =>
+      buildExportScene(
+        cc,
+        { bonds: [[0, 1, 1]], rings: [ring] },
+        { elements: {}, bondsStyle: { ...uniformStyle.bondsStyle, radius } },
+        ccData,
+      );
+    // The ring normal is +Z, so the torus lies in the XY plane and its z-extent
+    // equals twice the (scaled) tube radius. Doubling the bond radius must
+    // double the tube.
+    const tubeZ = (scene: THREE.Scene) => {
+      const b = ringsBoundingBox(scene);
+      return b.max.z - b.min.z;
+    };
+    const thin = tubeZ(sceneWith(0.08));
+    const thick = tubeZ(sceneWith(0.16));
+    expect(thin).toBeGreaterThan(0);
+    expect(thick).toBeCloseTo(2 * thin, 4);
+  });
+});
+
+// --- Unit cell: "Show unit cell" must reach the glb (issue #4) ---------------
+// The viewport draws the 3x3 cell as 12 edges (UnitCell.tsx). The glb export
+// must emit those edges as thin cylinders (glTF cannot serialize THREE.Line),
+// gated on the live `showUnitCell` view control.
+
+describe('glbExporter unit cell', () => {
+  const cell = [
+    [3, 0, 0],
+    [0, 3, 0],
+    [0, 0, 3],
+  ];
+
+  it('exports a unitcell node when a cell is present and showUnitCell is on', () => {
+    const scene = buildExportScene({ ...cc, cell }, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: true,
+    });
+    const node = scene.getObjectByName('unitcell');
+    expect(node).toBeDefined();
+    // Edges are real meshes (cylinders), not THREE.Line, so they round-trip.
+    let meshes = 0;
+    node!.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes += 1;
+    });
+    expect(meshes).toBeGreaterThan(0);
+  });
+
+  it('omits the unitcell node when showUnitCell is off', () => {
+    const scene = buildExportScene({ ...cc, cell }, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: false,
+    });
+    expect(scene.getObjectByName('unitcell')).toBeUndefined();
+  });
+
+  it('omits the unitcell node when there is no cell (non-periodic molecule)', () => {
+    const scene = buildExportScene(cc, { bonds: [[0, 1, 1]] }, uniformStyle, ccData, {
+      showUnitCell: true,
+    });
+    expect(scene.getObjectByName('unitcell')).toBeUndefined();
   });
 });
 

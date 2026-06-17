@@ -28,6 +28,8 @@ class FormatCapability:
     supports_periodic: bool
     requires_periodic: bool
     supports_constraints: bool
+    # The format string ase.io.write expects; None means same as `name`.
+    ase_write_format: str | None = None
 
 
 FORMAT_CAPABILITIES: dict[str, FormatCapability] = {
@@ -75,6 +77,9 @@ FORMAT_CAPABILITIES: dict[str, FormatCapability] = {
         supports_periodic=True,
         requires_periodic=True,
         supports_constraints=False,
+        # ase.io.write(format='xdatcar') raises UnknownFileTypeError; the real
+        # ASE write format string is 'vasp-xdatcar'.
+        ase_write_format="vasp-xdatcar",
     ),
     "vasp-xdatcar": FormatCapability(
         name="vasp-xdatcar",
@@ -111,11 +116,13 @@ FORMAT_CAPABILITIES: dict[str, FormatCapability] = {
         supports_periodic=False,
         requires_periodic=False,
         supports_constraints=False,
+        # ASE's write() only accepts 'proteindatabank', not 'pdb'.
+        ase_write_format="proteindatabank",
     ),
     "mol": FormatCapability(
         name="mol",
         supports_read=True,
-        supports_write=True,
+        supports_write=False,  # ASE has no mol writer.
         supports_multiple_frames=False,
         supports_periodic=False,
         requires_periodic=False,
@@ -144,6 +151,16 @@ def get_format_capability(format_name: str) -> FormatCapability:
     return capability
 
 
+def resolve_ase_write_format(format_name: str) -> str:
+    """The format string ase.io.write expects for this registry key.
+
+    Applies aliases like pdb -> proteindatabank.  Validates and normalises the
+    format name via get_format_capability, so unknown formats raise ValueError.
+    """
+    capability = get_format_capability(format_name)
+    return capability.ase_write_format or capability.name
+
+
 def check_export_compatibility(
     format_name: str,
     scope: Literal["current_frame", "full_trajectory"],
@@ -152,6 +169,16 @@ def check_export_compatibility(
 ) -> list[ExportWarning]:
     capability = get_format_capability(format_name)
     warnings: list[ExportWarning] = []
+
+    if not capability.supports_write:
+        warnings.append(
+            ExportWarning(
+                code="WRITE_NOT_SUPPORTED",
+                severity=WarningSeverity.ERROR,
+                message=f"Format '{capability.name}' cannot be written.",
+                details={"format": capability.name},
+            )
+        )
 
     if is_periodic and not capability.supports_periodic:
         warnings.append(

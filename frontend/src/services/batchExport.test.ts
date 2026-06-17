@@ -81,6 +81,37 @@ describe('buildSceneForDoc bond radius source', () => {
   });
 });
 
+// "Show unit cell" must reach the exported glb (issue #4): the toggle is a
+// global view control and the cell comes from the document.
+describe('buildSceneForDoc unit cell forwarding', () => {
+  const cellDoc = () =>
+    ({
+      structure: {
+        symbols: ['O'],
+        positions: [[0, 0, 0]],
+        cell: [
+          [3, 0, 0],
+          [0, 3, 0],
+          [0, 0, 3],
+        ],
+      },
+      visualization: { bonds: [], rings: [] },
+    }) as never;
+
+  beforeEach(() => {
+    useStructureStore.setState({ tabs: [], activeTabId: null, elements: {}, atomStyles: {} });
+  });
+
+  it('forwards the live showUnitCell control and the document cell into the glb', () => {
+    const vc = useStructureStore.getState().viewControls;
+    useStructureStore.setState({ viewControls: { ...vc, showUnitCell: true } });
+    expect(buildSceneForDoc(cellDoc()).getObjectByName('unitcell')).toBeDefined();
+
+    useStructureStore.setState({ viewControls: { ...vc, showUnitCell: false } });
+    expect(buildSceneForDoc(cellDoc()).getObjectByName('unitcell')).toBeUndefined();
+  });
+});
+
 // Per-atom overrides are snapshotted per-tab; a batch export must source each
 // tab's own overrides so one tab's selection colors never leak onto another.
 describe('buildSceneForDoc per-tab override isolation', () => {

@@ -11,6 +11,7 @@ from .format_capabilities import (
     ExportWarning,
     WarningSeverity,
     check_export_compatibility,
+    resolve_ase_write_format,
 )
 
 
@@ -70,10 +71,11 @@ def export_atoms_to_file(
         raise ValueError("Export path must include a file extension.")
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    ase_format = resolve_ase_write_format(normalized_format)
     if len(export_images) == 1:
-        write(str(path), export_images[0], format=normalized_format)
+        write(str(path), export_images[0], format=ase_format)
     else:
-        write(str(path), export_images, format=normalized_format)
+        write(str(path), export_images, format=ase_format)
 
     return ExportExecutionResult(
         output_path=path.resolve(),

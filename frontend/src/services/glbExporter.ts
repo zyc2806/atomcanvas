@@ -6,6 +6,7 @@ import { getAtomicNumber } from '../utils/chemistry';
 import { getBondRadiusScale } from '../utils/bondUtils';
 import { getNearestAtomIndexToRing } from '../components/r3f/aromaticRingsUtils';
 import { resolveBondHalfOpacity, isOpacityTransparent } from '../components/r3f/materials/opacityPolicy';
+import { ringTubeRadius } from '../utils/ringGeometry';
 import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/store';
 
 /**
@@ -28,12 +29,23 @@ import type { ElementStyle, BondStyleSettings, RenderStyle } from '../types/stor
  * opacity, and the render style. Atoms/bonds are bucketed by (color, opacity) so
  * per-atom styling survives the merge; each bond half is colored by its endpoint
  * atom (the viewport always element-splits, regardless of bondsStyle.colorMode).
- * `renderStyle` is baked into material roughness (standard 0.3 vs soft 1.0); the
- * cartoon/wireframe looks cannot round-trip to glb and fall back to solid meshes.
+ * `renderStyle` is baked per style (see materialForRenderStyle): standard =
+ * glossy (roughness 0.3); soft = matte (roughness 1.0); cartoon = matte +
+ * emissive base (so the flat toon body survives without scene lights).
+ * No outline is baked into the GLB — glTF 2.0 has no back-face-only mode and
+ * THREE.BackSide is silently dropped on export, causing the inflated hull to
+ * occlude atoms in PowerPoint. The on-screen WebGL view and PNG export keep the
+ * full outlined look; only the .glb omits it.
+ * These are APPROXIMATIONS — the following live looks CANNOT round-trip to a
+ * static glTF: soft shadows, screen-space AO, the cartoon 3-band toon banding,
+ * the cartoon view-dependent white highlight, and the pixel-constant /
+ * perspective-corrected outline width. Wireframe is not represented.
  *
- * Intentionally NOT exported (the glb captures the molecule's solid geometry, not
- * the full annotated scene): PBC-wrapped ghost bonds, hydrogen bonds (dashed), and
- * the unit cell. PNG export is a literal canvas snapshot and does keep all of
+ * The unit cell is exported (as 12 thin-cylinder edges under a `unitcell` node)
+ * when the live `showUnitCell` view control is on and the structure carries a
+ * cell. Intentionally NOT exported (the glb captures the molecule's solid
+ * geometry, not the full annotated scene): PBC-wrapped ghost bonds and hydrogen
+ * bonds (dashed). PNG export is a literal canvas snapshot and does keep all of
  * those. Note: glTF transparency (alphaMode BLEND) may not render in every
  * downstream viewer (e.g. PowerPoint's 3D model viewer).
  *
@@ -48,6 +60,7 @@ interface ElementData {
 interface MinimalStructure {
     symbols: string[];
     positions: number[][];
+    cell?: number[][];
 }
 interface MinimalVis {
     bonds: [number, number, number][];
@@ -70,12 +83,68 @@ export interface ExportOverrides {
     radiusOverrides?: { [i: number]: number };
     bondOpacityOverrides?: { [bondId: string]: number };
     renderStyle?: RenderStyle;
+    // Mirrors the live `showUnitCell` view control. When true (and a cell is
+    // present) the 3x3 cell is exported as 12 thin-cylinder edges.
+    showUnitCell?: boolean;
 }
 
 const bondIdFor = (i: number, j: number): string => `${Math.min(i, j)}-${Math.max(i, j)}`;
 
-const roughnessForRenderStyle = (renderStyle: RenderStyle | undefined): number =>
-    renderStyle === 'standard' ? 0.3 : 1.0;
+/** Per-render-style material recipe baked into the glb (issue #7). */
+interface RenderStyleMaterial {
+    roughness: number;
+    /** Base color is multiplied by this and baked into `emissive` (0 = none). */
+    emissiveFactor: number;
+}
+
+/**
+ * Translate the live render style into a baked material recipe. The live looks
+ * cannot fully round-trip to glTF, so each style is approximated:
+ *  - standard: glossy (low roughness)
+ *  - cartoon : flat (high roughness) + emissive base (so the toon body survives
+ *              without scene lights)
+ *  - soft    : flat, matte (lit by the environment)
+ * No outline is baked — glTF 2.0 has no back-face-only mode and THREE.BackSide
+ * is silently dropped on export, causing the hull to occlude atoms downstream
+ * (e.g. PowerPoint). The on-screen WebGL view keeps outlines; the .glb does not.
+ * An undefined style (direct callers / older tests) is treated as plain matte,
+ * preserving the previous default.
+ */
+function materialForRenderStyle(renderStyle: RenderStyle | undefined): RenderStyleMaterial {
+    switch (renderStyle) {
+        case 'standard':
+            return { roughness: 0.3, emissiveFactor: 0 };
+        case 'cartoon':
+            return { roughness: 1.0, emissiveFactor: 0.3 };
+        case 'soft':
+            return { roughness: 1.0, emissiveFactor: 0 };
+        default:
+            return { roughness: 1.0, emissiveFactor: 0 };
+    }
+}
+
+/** MeshStandardMaterial for a bucket, baking the render-style roughness/emissive
+ * (and optional transparency). */
+function bucketMaterial(
+    color: [number, number, number],
+    mat: RenderStyleMaterial,
+    opacity?: number,
+): THREE.MeshStandardMaterial {
+    const c = new THREE.Color(...color);
+    const params: THREE.MeshStandardMaterialParameters = {
+        color: c,
+        roughness: mat.roughness,
+        metalness: 0.0,
+    };
+    if (mat.emissiveFactor > 0) {
+        params.emissive = c.clone().multiplyScalar(mat.emissiveFactor);
+    }
+    if (opacity !== undefined) {
+        params.transparent = isOpacityTransparent(opacity);
+        params.opacity = opacity;
+    }
+    return new THREE.MeshStandardMaterial(params);
+}
 
 type AtomStyleMap = { [symbol: string]: { color: string; radius: number } };
 
@@ -84,6 +153,10 @@ const CYL_SEGMENTS = 16;
 const TORUS_TUBULAR_SEGMENTS = 64;
 const TORUS_RADIAL_SEGMENTS = 16;
 const FALLBACK_RADII = 0.5;
+// Unit-cell edges are drawn as thin black cylinders (glTF cannot serialize
+// THREE.Line, and WebGL ignores Line `linewidth`).
+const UNIT_CELL_EDGE_RADIUS = 0.02;
+const UNIT_CELL_COLOR: [number, number, number] = [0, 0, 0];
 // Unknown-element fallback. Matches the viewport's getAtomBaseColor fallback
 // (#ff1493) in src/hooks/useAtomColors.ts so an exotic symbol exports the same
 // color it renders on screen.
@@ -116,21 +189,14 @@ function colorBuckets() {
 function mergeBuckets(
     buckets: Map<string, { color: [number, number, number]; geoms: THREE.BufferGeometry[] }>,
     name: string,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     if (buckets.size === 0) return null;
     const group = new THREE.Group();
     group.name = name;
     for (const { color, geoms } of buckets.values()) {
-        const mesh = new THREE.Mesh(
-            mergeGeometries(geoms),
-            new THREE.MeshStandardMaterial({
-                color: new THREE.Color(...color),
-                roughness,
-                metalness: 0.0,
-            }),
-        );
-        group.add(mesh);
+        const merged = mergeGeometries(geoms);
+        group.add(new THREE.Mesh(merged, bucketMaterial(color, mat)));
     }
     return group;
 }
@@ -161,24 +227,14 @@ function styleBuckets() {
 function mergeStyleBuckets(
     buckets: Map<string, StyleBucket>,
     name: string,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     if (buckets.size === 0) return null;
     const group = new THREE.Group();
     group.name = name;
     for (const { color, opacity, geoms } of buckets.values()) {
-        const transparent = isOpacityTransparent(opacity);
-        const mesh = new THREE.Mesh(
-            mergeGeometries(geoms),
-            new THREE.MeshStandardMaterial({
-                color: new THREE.Color(...color),
-                roughness,
-                metalness: 0.0,
-                transparent,
-                opacity,
-            }),
-        );
-        group.add(mesh);
+        const merged = mergeGeometries(geoms);
+        group.add(new THREE.Mesh(merged, bucketMaterial(color, mat, opacity)));
     }
     return group;
 }
@@ -216,7 +272,7 @@ export function buildExportScene(
     overrides: ExportOverrides = {},
 ): THREE.Scene {
     const scene = new THREE.Scene();
-    const roughness = roughnessForRenderStyle(overrides.renderStyle);
+    const mat = materialForRenderStyle(overrides.renderStyle);
 
     // Per-atom style resolvers mirroring the live viewport (Atoms.tsx): a
     // per-atom override (selection color/size/opacity) wins, otherwise the
@@ -250,18 +306,86 @@ export function buildExportScene(
         g.translate(structure.positions[i][0], structure.positions[i][1], structure.positions[i][2]);
         addAtom(colorForAtom(i, sym), opacityForAtom(i, sym), g);
     });
-    const atomsGroup = mergeStyleBuckets(atomBuckets, 'atoms', roughness);
+    const atomsGroup = mergeStyleBuckets(atomBuckets, 'atoms', mat);
     if (atomsGroup) scene.add(atomsGroup);
 
     // --- Bonds: cylinders (1/2/3 per bond by order) under a single `bonds` node ---
-    const bondsGroup = buildBonds(structure, vis, style, colorForAtom, opacityForAtom, overrides, roughness);
+    const bondsGroup = buildBonds(structure, vis, style, colorForAtom, opacityForAtom, overrides, mat);
     if (bondsGroup) scene.add(bondsGroup);
 
     // --- Aromatic rings: a torus per ring under a single `rings` node ---
-    const ringsGroup = buildRings(structure, vis, colorForAtom);
+    const ringsGroup = buildRings(structure, vis, colorForAtom, style.bondsStyle.radius, mat);
     if (ringsGroup) scene.add(ringsGroup);
 
+    // --- Unit cell: 12 edge cylinders under a `unitcell` node, gated on the
+    //     live showUnitCell view control (only when a cell is present) ---
+    if (overrides.showUnitCell) {
+        const cellGroup = buildUnitCell(structure.cell);
+        if (cellGroup) scene.add(cellGroup);
+    }
+
     return scene;
+}
+
+/**
+ * Build the unit-cell wireframe as 12 thin black cylinder edges. Mirrors the
+ * vertex layout of UnitCell.tsx but emits cylinders rather than a THREE.Line so
+ * the edges survive the glTF export (and have visible width, unlike Line
+ * `linewidth`). Returns null for a missing/degenerate cell.
+ */
+function buildUnitCell(cell: number[][] | undefined): THREE.Object3D | null {
+    if (!cell || !Array.isArray(cell) || cell.length !== 3) return null;
+    if (!cell.every((row) => Array.isArray(row) && row.length >= 3 && row.every(Number.isFinite))) {
+        return null;
+    }
+
+    const origin = new THREE.Vector3(0, 0, 0);
+    const a = new THREE.Vector3(cell[0][0], cell[0][1], cell[0][2]);
+    const b = new THREE.Vector3(cell[1][0], cell[1][1], cell[1][2]);
+    const c = new THREE.Vector3(cell[2][0], cell[2][1], cell[2][2]);
+    const v000 = origin.clone();
+    const v100 = a.clone();
+    const v010 = b.clone();
+    const v001 = c.clone();
+    const v110 = a.clone().add(b);
+    const v101 = a.clone().add(c);
+    const v011 = b.clone().add(c);
+    const v111 = a.clone().add(b).add(c);
+    const edges: [THREE.Vector3, THREE.Vector3][] = [
+        [v000, v100], [v000, v010], [v000, v001],
+        [v100, v110], [v100, v101],
+        [v010, v110], [v010, v011],
+        [v001, v101], [v001, v011],
+        [v110, v111], [v101, v111], [v011, v111],
+    ];
+
+    const cylAxis = new THREE.Vector3(0, 1, 0);
+    const geoms: THREE.BufferGeometry[] = [];
+    for (const [p, q] of edges) {
+        const dir = q.clone().sub(p);
+        const len = dir.length();
+        if (len < 1e-6) continue;
+        const g = new THREE.CylinderGeometry(UNIT_CELL_EDGE_RADIUS, UNIT_CELL_EDGE_RADIUS, len, CYL_SEGMENTS);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(cylAxis, dir.clone().normalize()));
+        const mid = p.clone().add(q).multiplyScalar(0.5);
+        g.translate(mid.x, mid.y, mid.z);
+        geoms.push(g);
+    }
+    if (geoms.length === 0) return null;
+
+    const group = new THREE.Group();
+    group.name = 'unitcell';
+    group.add(
+        new THREE.Mesh(
+            mergeGeometries(geoms),
+            new THREE.MeshStandardMaterial({
+                color: new THREE.Color(...UNIT_CELL_COLOR),
+                roughness: 1.0,
+                metalness: 0.0,
+            }),
+        ),
+    );
+    return group;
 }
 
 /**
@@ -325,7 +449,7 @@ function buildBonds(
     colorForAtom: (i: number, sym: string) => [number, number, number],
     opacityForAtom: (i: number, sym: string) => number,
     overrides: ExportOverrides,
-    roughness: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     const { radius } = style.bondsStyle;
     const cylAxis = new THREE.Vector3(0, 1, 0);
@@ -423,24 +547,29 @@ function buildBonds(
         }
     }
 
-    return mergeStyleBuckets(buckets, 'bonds', roughness);
+    return mergeStyleBuckets(buckets, 'bonds', mat);
 }
 
 /**
  * Build the aromatic-ring tori. Mirrors AromaticRings.tsx: a base
- * TorusGeometry(1.0, 0.1) scaled uniformly by `radius * 0.6`, oriented from +Z
+ * TorusGeometry(1.0, tube) scaled uniformly by `radius * 0.6`, oriented from +Z
  * to the ring normal, translated to the ring center, and colored by the atom
- * nearest the ring center.
+ * nearest the ring center. The tube radius follows the bond radius via the shared
+ * `ringTubeRadius` helper so the donut thickens with the Radius slider, exactly
+ * like the bonds (and like the viewport).
  */
 function buildRings(
     structure: MinimalStructure,
     vis: MinimalVis,
     colorForAtom: (i: number, sym: string) => [number, number, number],
+    bondRadius: number,
+    mat: RenderStyleMaterial,
 ): THREE.Object3D | null {
     const rings = vis.rings;
     if (!rings || rings.length === 0) return null;
 
     const defaultNormal = new THREE.Vector3(0, 0, 1);
+    const tube = ringTubeRadius(bondRadius);
     const positions: [number, number, number][] = structure.positions
         .filter((p) => p.length >= 3)
         .map((p) => [p[0], p[1], p[2]]);
@@ -450,7 +579,7 @@ function buildRings(
     for (const [center, normal, radius] of rings) {
         if (center.length < 3 || normal.length < 3) continue;
         const s = radius * 0.6;
-        const g = new THREE.TorusGeometry(1.0, 0.1, TORUS_RADIAL_SEGMENTS, TORUS_TUBULAR_SEGMENTS);
+        const g = new THREE.TorusGeometry(1.0, tube, TORUS_RADIAL_SEGMENTS, TORUS_TUBULAR_SEGMENTS);
         g.scale(s, s, s);
         const ringNormal = new THREE.Vector3(normal[0], normal[1], normal[2]).normalize();
         g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(defaultNormal, ringNormal));
@@ -461,7 +590,7 @@ function buildRings(
         add(color, g);
     }
 
-    return mergeBuckets(buckets, 'rings', 0.45);
+    return mergeBuckets(buckets, 'rings', mat);
 }
 
 export async function exportGlb(scene: THREE.Scene): Promise<ArrayBuffer> {

@@ -27,7 +27,11 @@ from ..services.structure_utils import (
     atoms_to_response,
     atoms_to_structure,
 )
-from ..services.format_capabilities import WarningSeverity, check_export_compatibility
+from ..services.format_capabilities import (
+    WarningSeverity,
+    check_export_compatibility,
+    resolve_ase_write_format,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,10 +62,24 @@ def _sanitize_upload_filename(filename: str | None) -> str:
     return candidate
 
 
+# VASP files carry no extension; hint the reader by conventional stem so an
+# uploaded POSCAR/CONTCAR/OUTCAR/XDATCAR is read as the right VASP flavour
+# before autodetect.
+_VASP_STEM_HINTS: dict[str, list[str]] = {
+    "POSCAR": ["vasp"],
+    "CONTCAR": ["vasp"],
+    "OUTCAR": ["vasp-out"],
+    "XDATCAR": ["vasp-xdatcar"],
+}
+
+
 def _upload_format_candidates(filename: str) -> List[str]:
-    suffix = Path(filename).suffix.lower()
-    if suffix == ".cif":
+    path = Path(filename)
+    if path.suffix.lower() == ".cif":
         return ["cif"]
+    stem_hint = _VASP_STEM_HINTS.get(path.stem.upper())
+    if stem_hint:
+        return list(stem_hint)
     return []
 
 
@@ -294,10 +312,11 @@ async def export_structure(request: ExportRequest):
         # BackgroundTask is never registered, so the tmp file would otherwise
         # leak and pile up across failed exports.
         try:
+            ase_format = resolve_ase_write_format(format_name)
             if len(images) == 1:
-                write(tmp_path, images[0], format=format_name)
+                write(tmp_path, images[0], format=ase_format)
             else:
-                write(tmp_path, images, format=format_name)
+                write(tmp_path, images, format=ase_format)
 
             file_name = request.file_name or f"structure_export.{file_suffix}"
             headers = {

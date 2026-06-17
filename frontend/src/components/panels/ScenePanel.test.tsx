@@ -38,3 +38,22 @@ describe('ScenePanel render style', () => {
     ).toBeCloseTo(5);
   });
 });
+
+describe('ScenePanel camera projection', () => {
+  beforeEach(() => {
+    useStructureStore.getState().setCameraType('perspective');
+  });
+
+  it('switches camera projection to orthographic via the toggle', () => {
+    render(<ScenePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Orthographic' }));
+    expect(useStructureStore.getState().cameraType).toBe('orthographic');
+  });
+
+  it('switches camera projection back to perspective', () => {
+    useStructureStore.getState().setCameraType('orthographic');
+    render(<ScenePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Perspective' }));
+    expect(useStructureStore.getState().cameraType).toBe('perspective');
+  });
+});

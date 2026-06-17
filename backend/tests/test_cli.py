@@ -89,15 +89,16 @@ def test_convert_vasp_needs_periodic_structure(runner, tmp_path):
     assert "Traceback" not in bad.output
 
 
-def test_convert_pdb_is_a_clean_error(runner, tmp_path):
-    # PDB is not writable through the export pipeline (the capability registry
-    # keys it 'pdb' but ase.io.write only knows 'proteindatabank'), so the CLI
-    # must not advertise it. Asking for .pdb fails cleanly without writing.
+def test_convert_pdb_writes(runner, tmp_path):
+    # PDB now round-trips via the proteindatabank alias: the capability registry
+    # key 'pdb' is resolved to 'proteindatabank' before calling ase.io.write, so
+    # .pdb extension is mapped in _EXT_TO_FORMAT and the write succeeds.
     out = tmp_path / "water.pdb"
     result = runner.invoke(cli, ["convert", str(WATER), str(out)])
-    assert result.exit_code != 0
+    assert result.exit_code == 0, result.output
+    assert out.is_file()
+    assert out.stat().st_size > 0
     assert "Traceback" not in result.output
-    assert not out.exists()
 
 
 def test_convert_extensionless_is_a_clean_error(runner, tmp_path):

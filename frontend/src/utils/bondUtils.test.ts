@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRenderedAtomRadius, getBondSurfaceTrim } from './bondUtils';
+import { getRenderedAtomRadius, getBondSurfaceTrim, getOpacityAwareBondTrim } from './bondUtils';
 
 describe('getRenderedAtomRadius', () => {
   it('defaults the radius override to 1 (no shrink)', () => {
@@ -31,5 +31,33 @@ describe('bond trim follows the overridden atom radius', () => {
       getRenderedAtomRadius(elementRadius, atomScale, 'ball-stick', 0.3), 0, 'ball-stick');
     expect(full).toBeCloseTo(1.5);
     expect(shrunk).toBeCloseTo(0.45);
+  });
+});
+
+describe('getOpacityAwareBondTrim', () => {
+  it('runs the bond to the atom center (trim 0) for an opaque atom', () => {
+    // Opaque atom: the solid sphere hides the inner cylinder cap, so the bond
+    // half runs to the center and never protrudes past the curved surface.
+    const radius = getRenderedAtomRadius(1.0, 1.5, 'ball-stick');
+    expect(getOpacityAwareBondTrim(radius, 0, 'ball-stick', false)).toBe(0);
+  });
+
+  it('keeps the surface trim for a transparent atom', () => {
+    // Transparent (glass) atom: keep trimming to the surface, else the cylinder
+    // shows through the sphere.
+    const radius = getRenderedAtomRadius(1.0, 1.5, 'ball-stick');
+    expect(getOpacityAwareBondTrim(radius, 0, 'ball-stick', true)).toBeCloseTo(
+      getBondSurfaceTrim(radius, 0, 'ball-stick'),
+    );
+  });
+
+  it('buries a thick bond cap at the centre of an opaque atom (no protrusion)', () => {
+    // The "ball stuck on cylinder" artifact: a flat cap of radius bondRadius
+    // overhangs the curved sphere when surface-trimmed and the bond is thick.
+    // Running to the centre (trim 0) for the opaque atom removes the cap from
+    // the surface entirely — even when the bond is far thicker than the atom.
+    const atomRadius = 0.22; // a small H atom
+    const offsetLengthSq = 0; // single bond, on-axis
+    expect(getOpacityAwareBondTrim(atomRadius, offsetLengthSq, 'ball-stick', false)).toBe(0);
   });
 });

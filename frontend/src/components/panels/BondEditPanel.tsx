@@ -17,17 +17,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import { useStructureStore } from '../../store/useStructureStore';
 import { refreshTopology } from '../../services/topologyRefresh';
-
-// Bond-order overrides understood by the backend (besides the special "delete").
-const BOND_ORDERS = ['1.0', '1.5', '2.0', '3.0'] as const;
-type BondOrder = (typeof BOND_ORDERS)[number];
-
-const ORDER_LABELS: Record<BondOrder, string> = {
-  '1.0': 'Single (1)',
-  '1.5': 'Aromatic (1.5)',
-  '2.0': 'Double (2)',
-  '3.0': 'Triple (3)',
-};
+import { BOND_ORDERS, ORDER_LABELS, type BondOrder } from '../../utils/bondOrders';
+import { useBondEdits } from '../../hooks/useBondEdits';
 
 /** Stable bond id from a pair of atom indices: always min-max. */
 const bondIdFor = (i: number, j: number): string =>
@@ -39,6 +30,7 @@ export function BondEditPanel() {
   const topologyOverrides = useStructureStore((s) => s.topologyOverrides);
   const setTopologyOverride = useStructureStore((s) => s.setTopologyOverride);
   const clearTopologyOverrides = useStructureStore((s) => s.clearTopologyOverrides);
+  const { setBondsOrder, deleteBonds } = useBondEdits();
 
   const [order, setOrder] = useState<BondOrder>('1.0');
 
@@ -66,12 +58,6 @@ export function BondEditPanel() {
 
   const applyOverride = async (id: string, value: string | null) => {
     setTopologyOverride(id, value);
-    await refreshTopology();
-  };
-
-  const applyToTargets = async (value: string | null) => {
-    if (targetBondIds.length === 0) return;
-    targetBondIds.forEach((id) => setTopologyOverride(id, value));
     await refreshTopology();
   };
 
@@ -108,7 +94,7 @@ export function BondEditPanel() {
             <Button
               size="small"
               variant="contained"
-              onClick={() => applyToTargets(order)}
+              onClick={() => setBondsOrder(targetBondIds, order)}
             >
               Set order
             </Button>
@@ -118,7 +104,7 @@ export function BondEditPanel() {
             color="error"
             variant="outlined"
             startIcon={<DeleteIcon />}
-            onClick={() => applyToTargets('delete')}
+            onClick={() => deleteBonds(targetBondIds)}
           >
             Delete bond{targetBondIds.length === 1 ? '' : 's'}
           </Button>

@@ -35,22 +35,22 @@ these are the whole point.
 
 ## Render styles
 
-Three built-in render styles. Standard shows C<sub>60</sub> adsorbed on an
-Ag<sub>2</sub>O surface; soft shows a 2D covalent framework; cartoon shows a metal
-macrocycle.
+Three built-in render styles, shown on a single carbon atom so the shading model
+is the only thing that changes: **standard** is glossy specular, **soft** is matte
+diffuse, and **cartoon** adds discrete toon bands and a bold outline.
 
 <table>
   <tr>
     <td align="center" width="33%">
-      <img src="assets/gallery/style-standard.png" alt="Standard ball-and-stick style" width="100%">
+      <img src="assets/gallery/style-standard.png" alt="Standard render style — glossy specular shading" width="100%">
       <br><sub>Standard</sub>
     </td>
     <td align="center" width="33%">
-      <img src="assets/gallery/style-soft.png" alt="Soft ambient-shaded style" width="100%">
+      <img src="assets/gallery/style-soft.png" alt="Soft render style — matte diffuse shading" width="100%">
       <br><sub>Soft</sub>
     </td>
     <td align="center" width="33%">
-      <img src="assets/gallery/style-cartoon.png" alt="Cartoon toon-shaded style" width="100%">
+      <img src="assets/gallery/style-cartoon.png" alt="Cartoon render style — toon bands with a bold outline" width="100%">
       <br><sub>Cartoon</sub>
     </td>
   </tr>

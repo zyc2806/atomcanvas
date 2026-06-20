@@ -70,6 +70,37 @@ def test_render_no_gizmo_forwards_hide_gizmo(runner, monkeypatch, tmp_path):
     assert captured.get("hide_gizmo") is False
 
 
+def test_render_brightness_forwards_to_driver(runner, monkeypatch, tmp_path):
+    # --brightness must reach the driver as a float; without it, the default is
+    # None (the viewer keeps globalBrightness=1.0). Out-of-range values are
+    # rejected by click before the driver is touched.
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    captured = {}
+
+    def fake_render(**kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": 3}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--brightness", "2.0", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured.get("brightness") == 2.0
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured.get("brightness") is None
+
+    r3 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--brightness", "5.0", "--no-build"])
+    assert r3.exit_code != 0
+    assert "brightness" in r3.output.lower() or "2.0" in r3.output
+
+
 @pytest.mark.skipif(
     os.environ.get("ATOMCANVAS_RENDER_E2E") != "1",
     reason="browser render is opt-in; set ATOMCANVAS_RENDER_E2E=1 (needs playwright+chromium+built bundle)",

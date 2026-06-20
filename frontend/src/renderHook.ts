@@ -42,6 +42,7 @@ export function installRenderHook(): void {
     setVisParams: (partial: Partial<VisualizationParams>) => store.getState().setVisParams(partial),
     setViewControls: (partial: Partial<ViewControls>) => store.getState().setViewControls(partial),
     setBackground: (partial: Partial<BackgroundConfig>) => store.getState().setBackground(partial),
+    setGlobalBrightness: (value: number) => store.getState().setGlobalBrightness(value),
     applyScene: (doc: SceneDoc) => applySceneDocument(doc),
     capturePng: (scale = 1) => captureCanvasPng(scale),
     exportGlbBase64: async (): Promise<string | null> => {

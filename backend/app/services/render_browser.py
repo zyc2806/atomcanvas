@@ -60,6 +60,7 @@ def render_structure(
     render_style: str | None = None,
     transparent: bool = False,
     background: str | None = None,
+    brightness: float | None = None,
     scene: str | None = None,
     hide_gizmo: bool = False,
     host: str = "127.0.0.1",
@@ -96,6 +97,7 @@ def render_structure(
                 for method, arg in build_style_calls(
                     display=display, render_style=render_style,
                     transparent=transparent, background=background,
+                    brightness=brightness,
                 ):
                     page.evaluate(f"(a) => window.__atomcanvas.{method}(a)", arg)
 

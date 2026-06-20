@@ -34,19 +34,20 @@ See the full **[gallery](docs/GALLERY.md)** and the annotated
 
 ## Rendering styles
 
-Switch instantly between three built-in render styles — a clean **standard**
-ball-and-stick, **soft** ambient shading, or a **cartoon** toon outline — to match
-the figure you need.
+Switch instantly between three built-in render styles — a glossy **standard**
+finish, **soft** matte shading, or a **cartoon** toon outline — to match the
+figure you need. Shown here on a single carbon atom, so the shading model is the
+only thing that changes.
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/assets/gallery/style-standard.png" alt="Standard render style" width="100%"><br><sub><b>Standard</b></sub></td>
-    <td align="center" width="33%"><img src="docs/assets/gallery/style-soft.png" alt="Soft render style" width="100%"><br><sub><b>Soft</b></sub></td>
-    <td align="center" width="33%"><img src="docs/assets/gallery/style-cartoon.png" alt="Cartoon render style" width="100%"><br><sub><b>Cartoon</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-standard.png" alt="Standard render style — glossy specular shading" width="100%"><br><sub><b>Standard</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-soft.png" alt="Soft render style — matte diffuse shading" width="100%"><br><sub><b>Soft</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-cartoon.png" alt="Cartoon render style — toon bands with a bold outline" width="100%"><br><sub><b>Cartoon</b></sub></td>
   </tr>
 </table>
 
-<sub>Standard: C<sub>60</sub> on an Ag<sub>2</sub>O surface. Soft: a 2D covalent framework. Cartoon: a metal macrocycle.</sub>
+<sub>The same carbon atom in each style — <b>standard</b> glossy specular, <b>soft</b> matte diffuse, and <b>cartoon</b> toon bands with a bold outline.</sub>
 
 **See it in action** — upload → rotate → edit a bond → export:
 

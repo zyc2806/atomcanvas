@@ -39,7 +39,8 @@ def find_free_port(host: str = "127.0.0.1") -> int:
 
 
 def build_style_calls(
-    *, display: str | None, render_style: str | None, transparent: bool, background: str | None
+    *, display: str | None, render_style: str | None, transparent: bool,
+    background: str | None, brightness: float | None = None,
 ) -> list[tuple[str, object]]:
     """Ordered (method, arg) calls to replay against window.__atomcanvas.
 
@@ -50,6 +51,8 @@ def build_style_calls(
         calls.append(("setDisplayMode", display))
     if render_style:
         calls.append(("setVisParams", {"renderStyle": render_style}))
+    if brightness is not None:
+        calls.append(("setGlobalBrightness", brightness))
     if transparent:
         calls.append(("setViewControls", {"forceTransparentBackground": True}))
     if background:

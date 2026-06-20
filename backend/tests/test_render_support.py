@@ -50,3 +50,17 @@ def test_build_style_calls_orders_and_filters():
 
 def test_build_style_calls_empty_when_no_options():
     assert build_style_calls(display=None, render_style=None, transparent=False, background=None) == []
+
+
+def test_build_style_calls_forwards_brightness():
+    calls = build_style_calls(
+        display=None, render_style="soft", transparent=False, background=None, brightness=2.0
+    )
+    assert ("setGlobalBrightness", 2.0) in calls
+    # render_style must precede brightness (display/style first, then scene tweaks)
+    assert calls.index(("setVisParams", {"renderStyle": "soft"})) < calls.index(("setGlobalBrightness", 2.0))
+
+
+def test_build_style_calls_omits_brightness_when_none():
+    calls = build_style_calls(display=None, render_style=None, transparent=False, background=None)
+    assert all(method != "setGlobalBrightness" for method, _ in calls)

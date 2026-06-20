@@ -1,0 +1,27 @@
+# Keep the build context small and reproducible: never copy local build
+# artifacts, caches, dependency trees, or internal/personal docs into the image.
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+backend/static
+**/__pycache__
+*.pyc
+.pytest_cache
+*.egg-info
+.venv
+venv
+logs
+*.log
+.DS_Store
+.superpowers
+playwright-report
+test-results
+.playwright
+# Internal / personal dev docs (also gitignored)
+HANDOFF.md
+AGENTS.md
+CLAUDE.md
+docs

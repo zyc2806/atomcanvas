@@ -1,0 +1,45 @@
+[build-system]
+# setuptools>=77 understands the SPDX `license = "MIT"` string form below and is
+# fetched into the PEP 517 build-isolation env regardless of the host's version.
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atomcanvas"
+version = "0.1.0"
+description = "Visualization-only atomic-structure viewer — backend services, web API, and a headless chemistry CLI."
+authors = [{ name = "Zhang Yichen" }]
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "ase",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "rdkit",
+    "pyparsing",
+    "networkx",
+    "click",
+]
+
+[project.optional-dependencies]
+# Headless figure rendering drives a real browser (pixel-accurate to the GUI).
+# Heavy + needs `playwright install chromium`, so it is opt-in:
+#   pip install "atomcanvas[render]" && playwright install chromium
+render = ["playwright>=1.40"]
+
+[project.scripts]
+# `pip install .` then `atomcanvas bonds structure.cif` — the scriptable core.
+atomcanvas = "app.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+# KNOWN LIMITATION: the import package is the generic name `app`, so installing
+# this distribution puts a top-level `app` on sys.path — a collision risk in a
+# shared environment. Install into an isolated venv (recommended), or use the
+# CLI without installing via `python -m app.cli`. Renaming app -> atomcanvas is
+# the proper long-term fix (touches all imports + run.sh/serve.sh + the entry point).
+include = ["app*"]

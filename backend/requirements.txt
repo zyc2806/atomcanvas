@@ -1,0 +1,20 @@
+# Runtime dependencies, version-pinned for reproducible CI/builds.
+#
+# These exact versions were verified green (backend pytest 194 passed) and were
+# chosen to install on BOTH the local Python 3.10 conda env (`ase-view-env`) and
+# CI's Python 3.11 — every pin has wheels for both, so `pip install -r` won't
+# break either. starlette is pinned explicitly (a transitive of fastapi): its
+# 1.3.x line deprecated httpx in favor of "httpx2", and pinning keeps that
+# surprise from drifting in unannounced. Bump deliberately, then let CI confirm.
+fastapi==0.137.2
+starlette==1.3.1
+uvicorn==0.49.0
+python-multipart==0.0.32
+ase==3.28.0
+numpy==2.2.6
+scipy==1.15.3
+scikit-learn==1.7.2
+rdkit==2026.3.3
+pyparsing==3.3.2
+networkx==3.4.2
+click==8.4.1

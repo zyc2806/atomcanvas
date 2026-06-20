@@ -1,0 +1,158 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useStructureStore } from '../useStructureStore';
+
+const fakeDoc = (name: string) => ({ name, structure: { symbols: ['O','H','H'], positions: [[0,0,0],[0.96,0,0],[-0.24,0.93,0]] } }) as never;
+
+describe('tabs slice', () => {
+  beforeEach(() => useStructureStore.setState({ tabs: [], activeTabId: null, topologyOverrides: {} }));
+
+  it('addTab stores doc, activates it, and pushes structureData', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const s = useStructureStore.getState();
+    expect(s.tabs).toHaveLength(1);
+    expect(s.activeTabId).toBe(id);
+    expect(s.structureData).toBe(s.tabs[0].doc);
+  });
+
+  it('switchTab snapshots overrides into the old tab and restores the new one', () => {
+    const st = useStructureStore.getState();
+    const a = st.addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().setTopologyOverride('0-1', 'delete');
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().topologyOverrides).toEqual({});
+    const tabB = useStructureStore.getState().tabs.find(t => t.id === b)!;
+    expect(tabB.bondTopologyOverrides).toEqual({ '0-1': 'delete' });
+  });
+
+  it('snapshots and restores radiusOverrides per tab without leaking across tabs', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    // Tab B is active; give it a per-atom size override.
+    useStructureStore.getState().setRadiusOverrides({ 0: 1.8 });
+    // Switching to A must snapshot B's sizes into B and NOT leak onto A.
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().radiusOverrides).toBeNull();
+    const tabB = useStructureStore.getState().tabs.find((t) => t.id === b)!;
+    expect(tabB.radiusOverrides).toEqual({ 0: 1.8 });
+    // Switching back to B restores its sizes.
+    useStructureStore.getState().switchTab(b);
+    expect(useStructureStore.getState().radiusOverrides).toEqual({ 0: 1.8 });
+  });
+
+  it('snapshots and restores perAtomColorOverrides per tab without leaking across tabs', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    // Tab B is active; give it a per-atom color override.
+    useStructureStore.getState().applySelectionColor([0], '#ff0000');
+    // Switching to A must snapshot B's colors into B and NOT leak onto A.
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().perAtomColorOverrides).toBeNull();
+    const tabB = useStructureStore.getState().tabs.find((t) => t.id === b)!;
+    expect(tabB.perAtomColorOverrides).toEqual({ 0: '#ff0000' });
+    // Switching back to B restores its colors.
+    useStructureStore.getState().switchTab(b);
+    expect(useStructureStore.getState().perAtomColorOverrides).toEqual({ 0: '#ff0000' });
+  });
+
+  it('snapshots and restores per-element styles per tab without leaking across tabs', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    // Tab B is active; give it a per-element style.
+    useStructureStore.getState().setElementStyle('O', { color: '#ff0000' });
+    // Switching to A must snapshot B's element styles into B and NOT leak onto A.
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().elements).toEqual({});
+    const tabB = useStructureStore.getState().tabs.find((t) => t.id === b)!;
+    expect(tabB.elements).toEqual({ O: { color: '#ff0000' } });
+    // Switching back to B restores its element styles.
+    useStructureStore.getState().switchTab(b);
+    expect(useStructureStore.getState().elements).toEqual({ O: { color: '#ff0000' } });
+  });
+
+  it('closeTab of active tab activates a neighbor', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().closeTab(useStructureStore.getState().activeTabId!);
+    expect(useStructureStore.getState().activeTabId).toBe(a);
+  });
+
+  it('clears structureData when the last tab is closed', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    expect(useStructureStore.getState().structureData).not.toBeNull();
+    useStructureStore.getState().closeTab(id);
+    const s = useStructureStore.getState();
+    expect(s.tabs).toHaveLength(0);
+    expect(s.activeTabId).toBeNull();
+    expect(s.structureData).toBeNull();
+  });
+
+  // Undo history is per active-structure session: it must reset at every tab
+  // boundary so undo can never cross structures and corrupt another tab.
+  it('opening a new tab clears the undo history', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('switching tabs clears the undo history (no cross-tab undo)', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('closing the last tab clears the undo history (no resurrection on reopen)', () => {
+    const id = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().closeTab(id);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+    expect(useStructureStore.getState().future).toHaveLength(0);
+  });
+
+  it('closing a tab to a neighbor clears the undo history', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.getState().pushHistory();
+    expect(useStructureStore.getState().past.length).toBe(1);
+    useStructureStore.getState().closeTab(b);
+    expect(useStructureStore.getState().past).toHaveLength(0);
+  });
+
+  // Trajectory playback is ephemeral per active structure: a stale frame index
+  // must never leak into another (possibly shorter) tab's trajectory. Each tab
+  // transition must call resetPlayback(). Force mid-playback via setState (the
+  // fakeDoc has no trajectory, so setCurrentFrame would clamp to 0 on its own).
+  it('opening a new tab resets trajectory playback', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.setState({ currentFrame: 3, isPlaying: true });
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    expect(useStructureStore.getState().currentFrame).toBe(0);
+    expect(useStructureStore.getState().isPlaying).toBe(false);
+  });
+
+  it('switching tabs resets trajectory playback', () => {
+    const a = useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.setState({ currentFrame: 3, isPlaying: true });
+    useStructureStore.getState().switchTab(a);
+    expect(useStructureStore.getState().currentFrame).toBe(0);
+    expect(useStructureStore.getState().isPlaying).toBe(false);
+  });
+
+  it('closing a tab resets trajectory playback', () => {
+    useStructureStore.getState().addTab(fakeDoc('a'), 'a');
+    const b = useStructureStore.getState().addTab(fakeDoc('b'), 'b');
+    useStructureStore.setState({ currentFrame: 3, isPlaying: true });
+    useStructureStore.getState().closeTab(b);
+    expect(useStructureStore.getState().currentFrame).toBe(0);
+    expect(useStructureStore.getState().isPlaying).toBe(false);
+  });
+});

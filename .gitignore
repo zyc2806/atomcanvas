@@ -1,0 +1,31 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+backend/static/
+build/
+*.egg-info/
+playwright-report/
+test-results/
+.playwright/
+logs/
+*.log
+.DS_Store
+
+# brainstorming visual companion
+.superpowers/
+
+# Internal / personal dev docs — kept locally, never published to GitHub
+HANDOFF.md
+AGENTS.md
+CLAUDE.md
+docs/internal/
+
+# Local env / secrets (guardrail)
+.env
+.env.*
+!.env.example
+
+# Scratch output from the doc screenshot/gif capture scripts
+tmp/

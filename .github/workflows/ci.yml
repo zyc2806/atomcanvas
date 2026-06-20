@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc -b
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # NOTE: rdkit is installed via pip here (not conda). The rdkit PyPI package
+      # works on ubuntu-latest x86_64 with Python 3.11. If CI ever breaks on this
+      # step, check the rdkit PyPI release matrix — this is the load-bearing
+      # portability assumption for the backend job.
+      # Test-only deps (pytest, httpx) live in requirements-dev.txt — runtime
+      # requirements.txt stays runtime-only. httpx is the transport FastAPI's
+      # TestClient imports at collection time (conftest.py); without it pytest
+      # aborts with a usage error (exit 4) before any test runs.
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q

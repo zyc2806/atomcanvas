@@ -1,0 +1,9 @@
+# Test-only dependencies (NOT needed at runtime — see requirements.txt for those).
+#
+# httpx is the transport backend FastAPI's TestClient imports at collection time
+# (tests/conftest.py). Without it, pytest aborts with a usage error (exit 4)
+# before any test runs. Pinned so a future release can't change TestClient
+# behavior out from under the suite. CI installs this file alongside
+# requirements.txt; locally: pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.0
+httpx==0.28.1

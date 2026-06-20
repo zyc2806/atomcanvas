@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Pre-commit hook — fast gate: eslint + tsc -b on the frontend.
+#
+# Vitest and vite build are NOT run here (too slow for a commit gate).
+# Use scripts/check.sh for the full gate before pushing.
+#
+# Installation: run scripts/install-hooks.sh once.
+#
+# All tool invocations unset system proxy variables because on this machine the
+# system HTTP proxy (127.0.0.1:15236) intercepts localhost and causes eslint /
+# tsc to hang indefinitely.
+#
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+NOPROXY="env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY NO_PROXY=localhost,127.0.0.1,::1"
+
+# Only run if any staged .ts/.tsx files exist (fast exit for backend-only commits).
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
+if [ -z "$STAGED_TS" ]; then
+    exit 0
+fi
+
+echo "[pre-commit] TypeScript staged files detected — running eslint + tsc -b ..."
+
+cd "$REPO_ROOT/frontend"
+
+echo "[pre-commit] eslint ..."
+$NOPROXY npx eslint $STAGED_TS
+
+echo "[pre-commit] tsc -b ..."
+$NOPROXY npx tsc -b
+
+echo "[pre-commit] passed."

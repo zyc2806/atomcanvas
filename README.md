@@ -10,7 +10,7 @@ scene → export publication-ready figures, portable presets, and 3D models.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10–3.13](https://img.shields.io/badge/Python-3.10%E2%80%933.13-blue.svg)](backend/pyproject.toml)
 
-<img src="docs/assets/hero.png" alt="AtomCanvas rendering an atomic structure" width="80%">
+<img src="docs/assets/hero.png" alt="A metal macrocycle rendered in AtomCanvas (cartoon style)" width="80%">
 
 </div>
 

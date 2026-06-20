@@ -43,6 +43,33 @@ def test_render_missing_playwright_is_clean(runner, monkeypatch):
     assert "Traceback" not in result.output
 
 
+def test_render_no_gizmo_forwards_hide_gizmo(runner, monkeypatch, tmp_path):
+    # --no-gizmo must reach the driver as hide_gizmo=True; without it, the
+    # default is False. Stub the driver + bundle build so this is a fast,
+    # browser-free wiring check.
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    captured = {}
+
+    def fake_render(**kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": 3}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-gizmo", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured.get("hide_gizmo") is True
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured.get("hide_gizmo") is False
+
+
 @pytest.mark.skipif(
     os.environ.get("ATOMCANVAS_RENDER_E2E") != "1",
     reason="browser render is opt-in; set ATOMCANVAS_RENDER_E2E=1 (needs playwright+chromium+built bundle)",

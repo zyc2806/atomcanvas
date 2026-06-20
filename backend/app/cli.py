@@ -392,8 +392,9 @@ def serve(host: str, port: int, do_build: bool, use_reload: bool) -> None:
 @click.option("--transparent", is_flag=True, help="Transparent background.")
 @click.option("--background", default=None, help="Solid background color, e.g. '#ffffff'.")
 @click.option("--scene", type=click.Path(exists=True, dir_okay=False), default=None, help="Apply a saved scene.json (bakes edits+style+camera).")
+@click.option("--no-gizmo", "no_gizmo", is_flag=True, help="Hide the XYZ axes gizmo (cleaner figure output).")
 @click.option("--no-build", "do_build", flag_value=False, default=True, help="Do not auto-build the frontend bundle.")
-def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, scene, do_build):
+def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, scene, no_gizmo, do_build):
     from .services import render_browser
     from .services.render_support import parse_size
 
@@ -412,6 +413,7 @@ def render(structure, out_png, out_glb, size, scale, display, render_style, tran
             structure_path=structure, out_png=out_png, out_glb=out_glb,
             size=parsed_size, scale=scale, display=display, render_style=render_style,
             transparent=transparent, background=background, scene=scene,
+            hide_gizmo=no_gizmo,
         )
     except render_browser.RenderDependencyError as exc:
         raise click.ClickException(str(exc))

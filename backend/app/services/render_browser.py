@@ -61,6 +61,7 @@ def render_structure(
     transparent: bool = False,
     background: str | None = None,
     scene: str | None = None,
+    hide_gizmo: bool = False,
     host: str = "127.0.0.1",
     timeout_s: float = 60.0,
 ) -> dict:
@@ -97,6 +98,13 @@ def render_structure(
                     transparent=transparent, background=background,
                 ):
                     page.evaluate(f"(a) => window.__atomcanvas.{method}(a)", arg)
+
+                # Hide the XYZ axes gizmo for a clean figure (the hook forwards to
+                # the same setViewControls the UI toggle uses).
+                if hide_gizmo:
+                    page.evaluate(
+                        "() => window.__atomcanvas.setViewControls({ showAxesGizmo: false })"
+                    )
 
                 # Wait for real frames, then force one more render before capture.
                 start_frames = page.evaluate("() => window.__atomcanvas.frames()")

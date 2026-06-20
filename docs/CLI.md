@@ -218,6 +218,7 @@ At least one of `-o` / `--glb` is required.
 | `--transparent` | off | Transparent background. |
 | `--background TEXT` | none | Solid background color, e.g. `'#ffffff'`. |
 | `--scene FILE` | none | Apply a saved `scene.json` (bakes edits + style + camera). |
+| `--no-gizmo` | off | Hide the XYZ axes gizmo for a clean figure. |
 | `--no-build` | *(builds if needed)* | Skip auto-building the frontend bundle. |
 
 Examples:

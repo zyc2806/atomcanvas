@@ -34,21 +34,19 @@ See the full **[gallery](docs/GALLERY.md)** and the annotated
 
 ## Rendering styles
 
-Switch instantly between five built-in looks — a clean **standard** ball-and-stick,
-**soft** ambient shading, a **cartoon** toon outline, a **wireframe**, or **van der
-Waals** space-filling — to match the figure you need.
+Switch instantly between three built-in render styles — a clean **standard**
+ball-and-stick, **soft** ambient shading, or a **cartoon** toon outline — to match
+the figure you need.
 
 <table>
   <tr>
-    <td align="center" width="20%"><img src="docs/assets/gallery/style-standard.png" alt="Standard ball-and-stick" width="100%"><br><sub><b>Standard</b></sub></td>
-    <td align="center" width="20%"><img src="docs/assets/gallery/style-soft.png" alt="Soft ambient shading" width="100%"><br><sub><b>Soft</b></sub></td>
-    <td align="center" width="20%"><img src="docs/assets/gallery/style-cartoon.png" alt="Cartoon toon outline" width="100%"><br><sub><b>Cartoon</b></sub></td>
-    <td align="center" width="20%"><img src="docs/assets/gallery/style-wireframe.png" alt="Wireframe" width="100%"><br><sub><b>Wireframe</b></sub></td>
-    <td align="center" width="20%"><img src="docs/assets/gallery/style-vdw.png" alt="van der Waals space-filling" width="100%"><br><sub><b>van der Waals</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-standard.png" alt="Standard render style" width="100%"><br><sub><b>Standard</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-soft.png" alt="Soft render style" width="100%"><br><sub><b>Soft</b></sub></td>
+    <td align="center" width="33%"><img src="docs/assets/gallery/style-cartoon.png" alt="Cartoon render style" width="100%"><br><sub><b>Cartoon</b></sub></td>
   </tr>
 </table>
 
-<sub>Standard · wireframe · vdW: C<sub>60</sub> on an Ag<sub>2</sub>O surface. Soft: a 2D covalent framework. Cartoon: a metal macrocycle.</sub>
+<sub>Standard: C<sub>60</sub> on an Ag<sub>2</sub>O surface. Soft: a 2D covalent framework. Cartoon: a metal macrocycle.</sub>
 
 **See it in action** — upload → rotate → edit a bond → export:
 

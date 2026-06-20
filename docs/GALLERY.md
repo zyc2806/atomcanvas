@@ -35,31 +35,23 @@ these are the whole point.
 
 ## Render styles
 
-Five built-in render styles and display modes. Standard, wireframe, and vdW show
-C<sub>60</sub> adsorbed on an Ag<sub>2</sub>O surface; soft shows a 2D covalent
-framework; cartoon shows a metal macrocycle.
+Three built-in render styles. Standard shows C<sub>60</sub> adsorbed on an
+Ag<sub>2</sub>O surface; soft shows a 2D covalent framework; cartoon shows a metal
+macrocycle.
 
 <table>
   <tr>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <img src="assets/gallery/style-standard.png" alt="Standard ball-and-stick style" width="100%">
       <br><sub>Standard</sub>
     </td>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <img src="assets/gallery/style-soft.png" alt="Soft ambient-shaded style" width="100%">
       <br><sub>Soft</sub>
     </td>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <img src="assets/gallery/style-cartoon.png" alt="Cartoon toon-shaded style" width="100%">
       <br><sub>Cartoon</sub>
-    </td>
-    <td align="center" width="20%">
-      <img src="assets/gallery/style-wireframe.png" alt="Wireframe style" width="100%">
-      <br><sub>Wireframe</sub>
-    </td>
-    <td align="center" width="20%">
-      <img src="assets/gallery/style-vdw.png" alt="Van der Waals space-filling style" width="100%">
-      <br><sub>vdW (space-filling)</sub>
     </td>
   </tr>
 </table>

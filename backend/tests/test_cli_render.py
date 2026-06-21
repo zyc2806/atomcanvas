@@ -130,6 +130,43 @@ def test_render_camera_forwards_to_driver(runner, monkeypatch, tmp_path):
     assert r3.exit_code != 0
 
 
+def test_render_overrides_forwards_parsed_json(runner, monkeypatch, tmp_path):
+    # --overrides FILE must reach the driver as the parsed dict; default is None;
+    # malformed JSON is a clean ClickException (no traceback).
+    import json
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    captured = {}
+
+    def fake_render(**kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": 3}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    ov = tmp_path / "ov.json"
+    payload = {"colors": {"0": "#cccccc"}, "radii": {"0": 0.6}}
+    ov.write_text(json.dumps(payload))
+
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--overrides", str(ov), "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured.get("overrides") == payload
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured.get("overrides") is None
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json")
+    r3 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--overrides", str(bad), "--no-build"])
+    assert r3.exit_code != 0
+    assert "Traceback" not in r3.output
+
+
 @pytest.mark.skipif(
     os.environ.get("ATOMCANVAS_RENDER_E2E") != "1",
     reason="browser render is opt-in; set ATOMCANVAS_RENDER_E2E=1 (needs playwright+chromium+built bundle)",

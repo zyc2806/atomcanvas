@@ -44,6 +44,8 @@ export function installRenderHook(): void {
     setBackground: (partial: Partial<BackgroundConfig>) => store.getState().setBackground(partial),
     setGlobalBrightness: (value: number) => store.getState().setGlobalBrightness(value),
     setCameraType: (type: 'perspective' | 'orthographic') => store.getState().setCameraType(type),
+    setColorOverrides: (m: Record<number, string> | null) => store.getState().setColorOverrides(m),
+    setRadiusOverrides: (m: Record<number, number> | null) => store.getState().setRadiusOverrides(m),
     applyScene: (doc: SceneDoc) => applySceneDocument(doc),
     capturePng: (scale = 1) => captureCanvasPng(scale),
     exportGlbBase64: async (): Promise<string | null> => {

@@ -393,10 +393,11 @@ def serve(host: str, port: int, do_build: bool, use_reload: bool) -> None:
 @click.option("--background", default=None, help="Solid background color, e.g. '#ffffff'.")
 @click.option("--brightness", type=click.FloatRange(0.0, 2.0), default=None, help="Global brightness multiplier (0.0–2.0; 1.0 = default, 2.0 = max).")
 @click.option("--camera", type=click.Choice(["perspective", "orthographic"]), default=None, help="Camera projection (default: the viewer's perspective).")
+@click.option("--overrides", type=click.Path(exists=True, dir_okay=False), default=None, help='Per-atom color/radius overrides as JSON: {"colors":{idx:hex},"radii":{idx:scale}}.')
 @click.option("--scene", type=click.Path(exists=True, dir_okay=False), default=None, help="Apply a saved scene.json (bakes edits+style+camera).")
 @click.option("--no-gizmo", "no_gizmo", is_flag=True, help="Hide the XYZ axes gizmo (cleaner figure output).")
 @click.option("--no-build", "do_build", flag_value=False, default=True, help="Do not auto-build the frontend bundle.")
-def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, scene, no_gizmo, do_build):
+def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, overrides, scene, no_gizmo, do_build):
     from .services import render_browser
     from .services.render_support import parse_size
 
@@ -407,6 +408,13 @@ def render(structure, out_png, out_glb, size, scale, display, render_style, tran
     except ValueError as exc:
         raise click.ClickException(str(exc))
 
+    overrides_data = None
+    if overrides:
+        try:
+            overrides_data = json.loads(Path(overrides).read_text())
+        except (OSError, ValueError) as exc:
+            raise click.ClickException(f"Could not read --overrides JSON: {exc}")
+
     backend_dir = Path(__file__).resolve().parent.parent
     _ensure_frontend_bundle(backend_dir, do_build)
 
@@ -415,7 +423,7 @@ def render(structure, out_png, out_glb, size, scale, display, render_style, tran
             structure_path=structure, out_png=out_png, out_glb=out_glb,
             size=parsed_size, scale=scale, display=display, render_style=render_style,
             transparent=transparent, background=background, brightness=brightness,
-            camera=camera, scene=scene, hide_gizmo=no_gizmo,
+            camera=camera, overrides=overrides_data, scene=scene, hide_gizmo=no_gizmo,
         )
     except render_browser.RenderDependencyError as exc:
         raise click.ClickException(str(exc))

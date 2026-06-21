@@ -62,6 +62,7 @@ def render_structure(
     background: str | None = None,
     brightness: float | None = None,
     camera: str | None = None,
+    overrides: dict | None = None,
     scene: str | None = None,
     hide_gizmo: bool = False,
     host: str = "127.0.0.1",
@@ -108,6 +109,17 @@ def render_structure(
                     page.evaluate(
                         "() => window.__atomcanvas.setViewControls({ showAxesGizmo: false })"
                     )
+
+                # Per-atom color / radius overrides (applied last so a display-mode
+                # change cannot reset them). Keys are atom indices, values are hex
+                # colors / radius-scale multipliers.
+                if overrides:
+                    colors = overrides.get("colors")
+                    radii = overrides.get("radii")
+                    if colors:
+                        page.evaluate("(m) => window.__atomcanvas.setColorOverrides(m)", colors)
+                    if radii:
+                        page.evaluate("(m) => window.__atomcanvas.setRadiusOverrides(m)", radii)
 
                 # Wait for real frames, then force one more render before capture.
                 start_frames = page.evaluate("() => window.__atomcanvas.frames()")

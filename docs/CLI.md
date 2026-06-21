@@ -218,6 +218,7 @@ At least one of `-o` / `--glb` is required.
 | `--transparent` | off | Transparent background. |
 | `--background TEXT` | none | Solid background color, e.g. `'#ffffff'`. |
 | `--brightness FLOAT` | none | Global brightness multiplier, `0.0`–`2.0` (`1.0` = default, `2.0` = max). |
+| `--camera` | none | Camera projection: `perspective` or `orthographic`. |
 | `--scene FILE` | none | Apply a saved `scene.json` (bakes edits + style + camera). |
 | `--no-gizmo` | off | Hide the XYZ axes gizmo for a clean figure. |
 | `--no-build` | *(builds if needed)* | Skip auto-building the frontend bundle. |

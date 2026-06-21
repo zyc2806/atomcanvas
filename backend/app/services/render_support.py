@@ -41,10 +41,13 @@ def find_free_port(host: str = "127.0.0.1") -> int:
 def build_style_calls(
     *, display: str | None, render_style: str | None, transparent: bool,
     background: str | None, brightness: float | None = None,
+    camera: str | None = None,
 ) -> list[tuple[str, object]]:
     """Ordered (method, arg) calls to replay against window.__atomcanvas.
 
     Display goes first because setDisplayMode resets atomScale/bondRadius/showBonds.
+    Camera type goes last so any display/style change that alters the bounds has
+    already happened before the orthographic zoom is matched to the framing.
     """
     calls: list[tuple[str, object]] = []
     if display:
@@ -57,4 +60,6 @@ def build_style_calls(
         calls.append(("setViewControls", {"forceTransparentBackground": True}))
     if background:
         calls.append(("setBackground", {"solidColor": background}))
+    if camera:
+        calls.append(("setCameraType", camera))
     return calls

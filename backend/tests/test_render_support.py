@@ -64,3 +64,18 @@ def test_build_style_calls_forwards_brightness():
 def test_build_style_calls_omits_brightness_when_none():
     calls = build_style_calls(display=None, render_style=None, transparent=False, background=None)
     assert all(method != "setGlobalBrightness" for method, _ in calls)
+
+
+def test_build_style_calls_forwards_camera_last():
+    calls = build_style_calls(
+        display="vdw", render_style=None, transparent=False, background=None,
+        camera="orthographic",
+    )
+    assert ("setCameraType", "orthographic") in calls
+    # camera goes last (after display changes the bounds)
+    assert calls[-1] == ("setCameraType", "orthographic")
+
+
+def test_build_style_calls_omits_camera_when_none():
+    calls = build_style_calls(display="vdw", render_style=None, transparent=False, background=None)
+    assert all(method != "setCameraType" for method, _ in calls)

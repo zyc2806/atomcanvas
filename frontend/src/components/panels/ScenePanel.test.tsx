@@ -70,6 +70,23 @@ describe('ScenePanel background and brightness', () => {
   });
 });
 
+describe('ScenePanel aromatic rings toggle', () => {
+  beforeEach(() => {
+    useStructureStore.getState().setViewControls({ showAromaticRings: true });
+  });
+
+  it('aromatic rings checkbox is checked by default', () => {
+    render(<ScenePanel />);
+    expect(screen.getByRole('checkbox', { name: /aromatic rings/i })).toBeChecked();
+  });
+
+  it('unchecking aromatic rings writes viewControls.showAromaticRings=false', () => {
+    render(<ScenePanel />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /aromatic rings/i }));
+    expect(useStructureStore.getState().viewControls.showAromaticRings).toBe(false);
+  });
+});
+
 describe('ScenePanel render style', () => {
   beforeEach(() => {
     useStructureStore.getState().setVisParams({

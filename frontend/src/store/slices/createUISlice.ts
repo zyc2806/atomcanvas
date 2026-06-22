@@ -120,6 +120,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         forceTransparentBackground: false,
         tooltipTheme: 'dark',
         axesLabels: 'xyz',
+        showAromaticRings: true,
     },
     visParams: {
         displayMode: 'ball-stick',

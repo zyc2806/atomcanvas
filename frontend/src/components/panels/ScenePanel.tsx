@@ -200,6 +200,22 @@ export function ScenePanel() {
           }
           label="Atom labels"
         />
+        <Tooltip title="Draw the ring torus inside aromatic rings; off redraws them as alternating single/double (Kekulé) bonds">
+          <span>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={viewControls.showAromaticRings}
+                  onChange={(e) =>
+                    setViewControls({ showAromaticRings: e.target.checked })
+                  }
+                />
+              }
+              label="Aromatic rings"
+            />
+          </span>
+        </Tooltip>
       </Stack>
 
       <Divider sx={{ my: 2 }} />

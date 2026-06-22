@@ -75,6 +75,9 @@ export interface Visualization {
     labels?: string[];
     fixed_atoms?: number[];
     bond_diagnostics?: BondDiagnostics;
+    // Aromatic "min-max" bond id -> Kekulé order (1 or 2). Used to redraw
+    // aromatic bonds as alternating single/double when showAromaticRings is off.
+    kekule_orders?: { [bondId: string]: number };
 }
 
 export interface StandardStructureObject {
@@ -95,6 +98,10 @@ export interface ViewControls {
     showAxesGizmo?: boolean;
     forceTransparentBackground?: boolean;
     axesLabels: 'xyz' | 'abc';
+    // ON (default): draw the aromatic-ring torus; aromatic bonds stay single
+    // lines (order 1.5). OFF: hide the torus and redraw aromatic bonds as
+    // alternating single/double (Kekulé) using Visualization.kekule_orders.
+    showAromaticRings: boolean;
 }
 
 export interface VisualizationParams {

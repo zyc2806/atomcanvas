@@ -40,6 +40,11 @@ class Visualization(BaseModel):
     labels: Optional[List[str]] = None
     fixed_atoms: Optional[List[int]] = None
     bond_diagnostics: Optional[BondDiagnostics] = None
+    # Aromatic "min-max" bond id -> Kekulé order (1.0/2.0). Lets the frontend
+    # redraw aromatic bonds as alternating single/double when the ring torus is
+    # hidden, without recomputing chemistry client-side. Empty/None when there
+    # are no finite RDKit-aromatic bonds.
+    kekule_orders: Optional[Dict[str, float]] = None
 
 
 class StandardStructureObject(BaseModel):

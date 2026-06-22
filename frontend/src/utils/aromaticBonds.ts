@@ -8,6 +8,9 @@
 /** Bond tuple as stored in visualization.bonds: [atom1, atom2, order] */
 type BondTuple = [number, number, number];
 
+/** Aromatic "min-max" bond id -> Kekulé order (1 or 2), from the backend. */
+type KekuleOrders = { [bondId: string]: number };
+
 const AROMATIC_ORDER = 1.5;
 
 /** Canonical bond-id string shared with createUISlice. */
@@ -29,6 +32,39 @@ export function aromaticBondIds(bonds: BondTuple[]): Set<string> {
         }
     }
     return ids;
+}
+
+/**
+ * Returns the bond list to render given the aromatic-ring display toggle.
+ *
+ * ON (showAromaticRings=true): aromatic bonds keep order 1.5 (single line; the
+ * ring torus is drawn separately) — the input array is returned unchanged.
+ *
+ * OFF: each aromatic (order 1.5) bond is rewritten to its Kekulé order (1 or 2)
+ * from `kekuleOrders`, so e.g. benzene renders as alternating single/double
+ * bonds with no torus. Non-aromatic bonds, and aromatic bonds with no Kekulé
+ * entry, are left untouched. Pure: never mutates the input, and returns the
+ * same array reference when no swap occurs (keeps useMemo deps stable).
+ */
+export function applyAromaticDisplay(
+    bonds: BondTuple[],
+    kekuleOrders: KekuleOrders | undefined,
+    showAromaticRings: boolean,
+): BondTuple[] {
+    if (showAromaticRings || !kekuleOrders) return bonds;
+    let changed = false;
+    const out = bonds.map((bond): BondTuple => {
+        const [u, v, order] = bond;
+        if (order === AROMATIC_ORDER) {
+            const kek = kekuleOrders[toBondId(u, v)];
+            if (kek !== undefined && kek !== AROMATIC_ORDER) {
+                changed = true;
+                return [u, v, kek];
+            }
+        }
+        return bond;
+    });
+    return changed ? out : bonds;
 }
 
 /**

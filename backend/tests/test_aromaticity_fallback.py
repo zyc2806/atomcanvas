@@ -64,10 +64,19 @@ NON_AROMATIC = {
 
 @pytest.fixture
 def force_rdkit_failure(monkeypatch):
-    """Force the RDKit bond-order step to return nothing -> heuristic fallback."""
+    """Force the RDKit bond-order step to return nothing -> heuristic fallback.
+
+    detect_bonds_rdkit returns a 3-tuple (bonds, rings, kekule_orders); the empty
+    failure case is ([], [], {}). We also clear BONDS_CACHE so the fallback path is
+    genuinely re-computed here rather than served a cache hit warmed by TestRDKitPath
+    (same molecules + bond_inference_mode='full' -> identical content-based key).
+    """
+    from app.services.geometry_cache import BONDS_CACHE
+
+    BONDS_CACHE.clear()
     monkeypatch.setattr(
         "app.services.geometry.detect_bonds_rdkit",
-        lambda *a, **k: ([], []),
+        lambda *a, **k: ([], [], {}),
     )
 
 

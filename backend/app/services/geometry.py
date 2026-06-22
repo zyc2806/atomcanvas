@@ -615,9 +615,12 @@ def infer_bond_orders(
     bonds: List[Any],
     bond_inference_mode: Literal["auto", "quick", "full"] = "auto",
     diagnostics: Optional[Dict[str, Any]] = None,
-) -> Tuple[List[Any], List[Tuple[List[float], List[float], float]]]:
+) -> Tuple[List[Any], List[Tuple[List[float], List[float], float]], Dict[str, float]]:
     """
     Main entry point for bond order inference.
+
+    Returns ``(bonds, rings, kekule_orders)``; see ``detect_bonds_rdkit`` for the
+    Kekulé map contract (aromatic "min-max" bond id -> 1.0/2.0).
     """
     debug_log("--- Starting Hybrid Bond Order Inference ---")
 
@@ -630,6 +633,10 @@ def infer_bond_orders(
 
     final_bonds = []
     all_rings = []
+    # Parallel map: aromatic bond "min-max" id -> Kekulé order (1.0/2.0). Only the
+    # finite RDKit-aromatic path populates this; periodic/quick paths already emit
+    # 1/2 orders directly, so they need no map.
+    all_kekule_orders: Dict[str, float] = {}
 
     cluster_bonds_map = defaultdict(list)
     for b in bonds:
@@ -686,7 +693,7 @@ def infer_bond_orders(
             )
         elif strategy == "full":
             c_bonds_stripped = [b[:2] for b in c_bonds]
-            rd_bonds, rd_rings = detect_bonds_rdkit(atoms, c_bonds_stripped, indices)
+            rd_bonds, rd_rings, rd_kekule = detect_bonds_rdkit(atoms, c_bonds_stripped, indices)
             if rd_bonds:
                 # Map RDKit results back to include original offsets
                 order_map_local = {(b[0], b[1]): b[2] for b in rd_bonds}
@@ -696,12 +703,18 @@ def infer_bond_orders(
                     offset = b[2] if len(b) >= 3 else (0, 0, 0)
                     inferred.append((u, v, order, offset))
                 rings = rd_rings
+                # rd_kekule keys are global "min-max" ids, so clusters never collide.
+                all_kekule_orders.update(rd_kekule)
                 _record_bond_diagnostics(
                     diagnostics,
                     strategy="full",
                     summary_key="rdkit",
                 )
             else:
+                # RDKit-failure fallback. This path can still emit order-1.5 bonds
+                # (heuristic aromaticity) with NO kekule_orders entry; the frontend
+                # then leaves them as single lines when the torus is hidden — a safe
+                # degrade, since a reliable Kekulé matching is unavailable here.
                 debug_log("    RDKit failed. Trying Kekule fallback.")
                 generator = KekuleStructureGenerator(atoms, c_bonds)
                 inferred = generator.generate_kekule()
@@ -779,7 +792,7 @@ def infer_bond_orders(
         final_bonds.extend(inferred)
         all_rings.extend(rings)
 
-    return final_bonds, all_rings
+    return final_bonds, all_rings, all_kekule_orders
 
 
 def _filter_hydrogen_bonds(atoms: Atoms, bonds: List[Any]) -> List[Any]:
@@ -951,6 +964,7 @@ def _get_bonds_and_ghosts_uncached(
         Tuple[Tuple[float, float, float], Tuple[float, float, float], int, int, float]
     ],
     List[Tuple[List[float], List[float], float]],
+    Dict[str, float],
 ]:
     debug_log(f"\n--- Starting get_bonds_and_ghosts with scale {bond_scale} ---")
     if bond_overrides is None:
@@ -965,14 +979,14 @@ def _get_bonds_and_ghosts_uncached(
     all_bonds_set = get_structure_topology(atoms, bond_scale, bond_overrides)
 
     if not all_bonds_set:
-        return [], [], []
+        return [], [], [], {}
 
     positions = atoms.positions
     cell = np.array(atoms.get_cell())
     connectivity_bonds = list(all_bonds_set)
 
     # 2. Infer Bond Orders
-    bonds_w_orders, aromatic_rings = infer_bond_orders(
+    bonds_w_orders, aromatic_rings, kekule_orders = infer_bond_orders(
         atoms,
         connectivity_bonds,
         bond_inference_mode=bond_inference_mode,
@@ -1210,7 +1224,7 @@ def _get_bonds_and_ghosts_uncached(
 
     debug_log(f"Generated {len(wrapped_ghost_bonds)} ghost bond segments.")
     debug_log("--- Finished get_bonds_and_ghosts ---\n")
-    return regular_bonds, wrapped_ghost_bonds, aromatic_rings
+    return regular_bonds, wrapped_ghost_bonds, aromatic_rings, kekule_orders
 
 
 def get_bonds_and_ghosts(
@@ -1219,6 +1233,7 @@ def get_bonds_and_ghosts(
     bond_overrides: Optional[Dict[str, str]] = None,
     bond_inference_mode: Literal["auto", "quick", "full"] = "auto",
     diagnostics: Optional[Dict[str, Any]] = None,
+    kekule_out: Optional[Dict[str, float]] = None,
 ) -> Tuple[
     List[Tuple[int, int, float]],
     List[
@@ -1228,6 +1243,12 @@ def get_bonds_and_ghosts(
 ]:
     """Public entry point — caches by content fingerprint + bond params.
 
+    Returns the (bonds, ghost_bonds, rings) triple unchanged for every existing
+    caller. The aromatic Kekulé map (aromatic "min-max" bond id -> 1.0/2.0) is
+    exposed via the optional ``kekule_out`` out-param — filled from the cached
+    result on both hit and miss — rather than widening the public return tuple,
+    so the many three-tuple unpack sites stay intact.
+
     When diagnostics is not None the cache is BYPASSED: diagnostics is an
     out-param accumulator that a cache hit would leave unfilled.
 
@@ -1236,12 +1257,16 @@ def get_bonds_and_ghosts(
     """
     if diagnostics is not None:
         # Diagnostics mode: bypass cache so the accumulator dict is always filled.
-        return _get_bonds_and_ghosts_uncached(
+        bonds, ghosts, rings, kekule_orders = _get_bonds_and_ghosts_uncached(
             atoms, bond_scale, bond_overrides, bond_inference_mode, diagnostics
         )
-    return BONDS_CACHE.get_or_compute(
-        bonds_cache_key(atoms, bond_scale, bond_overrides, bond_inference_mode),
-        lambda: _get_bonds_and_ghosts_uncached(
-            atoms, bond_scale, bond_overrides, bond_inference_mode, None
-        ),
-    )
+    else:
+        bonds, ghosts, rings, kekule_orders = BONDS_CACHE.get_or_compute(
+            bonds_cache_key(atoms, bond_scale, bond_overrides, bond_inference_mode),
+            lambda: _get_bonds_and_ghosts_uncached(
+                atoms, bond_scale, bond_overrides, bond_inference_mode, None
+            ),
+        )
+    if kekule_out is not None:
+        kekule_out.update(kekule_orders)
+    return bonds, ghosts, rings

@@ -16,7 +16,7 @@ import { syncMaterialAlphaHash } from './materials/materialUpdate';
 import { computeBondHalves } from './bondHalves';
 import type { BondHalf, WrappedGhostBond } from './bondHalves';
 import type { LodSettings } from './lod';
-import { aromaticBondIds, shouldHighlightBondHalf } from '../../utils/aromaticBonds';
+import { applyAromaticDisplay, aromaticBondIds, shouldHighlightBondHalf } from '../../utils/aromaticBonds';
 
 // Stable fallback uColor for the instanced toon material. The instanced path
 // always sets per-half colors via setColorAt, so USE_INSTANCING_COLOR is defined
@@ -48,7 +48,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
     } = useStructureStore();
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const { bondRadius, atomScale, displayMode, renderStyle, cartoonParams } = visParams;
-    const { showShadows, showBonds } = viewControls;
+    const { showShadows, showBonds, showAromaticRings } = viewControls;
     const { getAtomColor, getAtomOpacity, getAtomBaseOpacity } = useAtomColors();
 
     const activeStructure = structure || storeStructureData;
@@ -67,13 +67,26 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
 
         if (isCustomMode) {
             positions = customPositions;
-            bonds = customBonds;
+            // kekule_orders is topology-stable across trajectory frames, so the
+            // aromatic→Kekulé swap applies while scrubbing too (keeps the OFF look
+            // consistent with frame 0 — no-op when the toggle is on).
+            bonds = applyAromaticDisplay(
+                (customBonds ?? []) as [number, number, number][],
+                activeStructure?.visualization?.kekule_orders,
+                showAromaticRings,
+            );
             ghostBonds = customGhostBonds || [];
             symbols = activeStructure?.structure?.symbols || [];
         } else {
             if (!activeStructure || !activeStructure.visualization) return [];
             positions = activeStructure.structure.positions;
-            bonds = activeStructure.visualization.bonds;
+            // When the aromatic-ring torus is hidden, redraw aromatic bonds as
+            // their Kekulé single/double orders (no-op when the toggle is on).
+            bonds = applyAromaticDisplay(
+                activeStructure.visualization.bonds,
+                activeStructure.visualization.kekule_orders,
+                showAromaticRings,
+            );
             ghostBonds = activeStructure.visualization.wrapped_ghost_bonds || [];
             symbols = activeStructure.structure.symbols;
         }
@@ -95,10 +108,14 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
             getAtomOpacity,
             getAtomBaseOpacity,
         });
-    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle, radiusOverrides]);
+    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, showAromaticRings, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle, radiusOverrides]);
 
     // Precompute the Set of aromatic logicalBondIds so the highlight effect can
     // gate atom-selection-driven highlights without touching aromatic bonds.
+    // Deliberately derived from the canonical 1.5 bonds (NOT the showAromaticRings
+    // toggle): a ring bond keeps stable selection/highlight semantics whether the
+    // torus is shown or it's drawn as a Kekulé single/double — matching the store's
+    // aromatic auto-selection exclusion, which is likewise toggle-independent.
     const aromaticIds = useMemo((): Set<string> => {
         const bonds = isCustomMode
             ? (customBonds as [number, number, number][] | undefined)

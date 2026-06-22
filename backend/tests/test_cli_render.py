@@ -70,6 +70,32 @@ def test_render_no_gizmo_forwards_hide_gizmo(runner, monkeypatch, tmp_path):
     assert captured.get("hide_gizmo") is False
 
 
+def test_render_no_aromatic_rings_forwards_flag(runner, monkeypatch, tmp_path):
+    # --no-aromatic-rings must reach the driver as hide_aromatic_rings=True;
+    # without it the default is False (torus stays, matching the viewer default).
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    captured = {}
+
+    def fake_render(**kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": 3}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-aromatic-rings", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured.get("hide_aromatic_rings") is True
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured.get("hide_aromatic_rings") is False
+
+
 def test_render_brightness_forwards_to_driver(runner, monkeypatch, tmp_path):
     # --brightness must reach the driver as a float; without it, the default is
     # None (the viewer keeps globalBrightness=1.0). Out-of-range values are

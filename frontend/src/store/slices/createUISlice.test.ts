@@ -137,6 +137,29 @@ describe('createUISlice', () => {
     expect(result.current.visParams.cartoonParams.outlineThickness).toBe(5);
   });
 
+  // Aromatic-ring display toggle: ON (default) keeps the torus + 1.5 single-line
+  // look; OFF hides the torus and lets the render layer swap to Kekulé bonds.
+  describe('showAromaticRings toggle', () => {
+    it('defaults to true so the current aromatic-ring look is preserved', () => {
+      const { result } = renderHook(() => useStructureStore());
+      expect(result.current.viewControls.showAromaticRings).toBe(true);
+    });
+
+    it('toggles off via setViewControls without touching other view controls', () => {
+      const { result } = renderHook(() => useStructureStore());
+      act(() => {
+        result.current.setViewControls({ showAromaticRings: false });
+      });
+      expect(result.current.viewControls.showAromaticRings).toBe(false);
+      // unrelated controls are preserved by the partial merge
+      expect(result.current.viewControls.showBonds).toBe(true);
+      // restore for any later view-control assertions in this file
+      act(() => {
+        result.current.setViewControls({ showAromaticRings: true });
+      });
+    });
+  });
+
   describe('exportScale', () => {
     it('should default to 1', () => {
       const { result } = renderHook(() => useStructureStore());

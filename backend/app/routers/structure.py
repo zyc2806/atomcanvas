@@ -227,12 +227,14 @@ async def update_visualization(request: UpdateStructureRequest):
         )
 
         # Recalculate everything consistently using the same service components
+        kekule_orders: dict[str, float] = {}
         bonds, wrapped_ghost_bonds, rings = get_bonds_and_ghosts(
             atoms,
             bond_scale=params.bond_scale,
             bond_overrides=params.bond_overrides,
             bond_inference_mode=params.bond_inference_mode,
             diagnostics=bond_diagnostics_payload,
+            kekule_out=kekule_orders,
         )
         wrapped_h_bonds, unwrapped_h_bonds = calc_h_bond_geometries(
             atoms,
@@ -256,6 +258,7 @@ async def update_visualization(request: UpdateStructureRequest):
             "unwrapped_h_bonds": unwrapped_h_bonds,
             "labels": atom_labels,
             "fixed_atoms": sorted(list(set(fixed_atoms_indices))),
+            "kekule_orders": kekule_orders,
         }
         if bond_diagnostics_payload is not None:
             visualization_payload["bond_diagnostics"] = bond_diagnostics_payload

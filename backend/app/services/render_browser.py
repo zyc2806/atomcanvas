@@ -65,6 +65,7 @@ def render_structure(
     overrides: dict | None = None,
     scene: str | None = None,
     hide_gizmo: bool = False,
+    hide_aromatic_rings: bool = False,
     host: str = "127.0.0.1",
     timeout_s: float = 60.0,
 ) -> dict:
@@ -108,6 +109,13 @@ def render_structure(
                 if hide_gizmo:
                     page.evaluate(
                         "() => window.__atomcanvas.setViewControls({ showAxesGizmo: false })"
+                    )
+
+                # Hide the aromatic-ring torus; the viewer then redraws aromatic
+                # bonds as alternating single/double (Kekulé) using kekule_orders.
+                if hide_aromatic_rings:
+                    page.evaluate(
+                        "() => window.__atomcanvas.setViewControls({ showAromaticRings: false })"
                     )
 
                 # Per-atom color / radius overrides (applied last so a display-mode

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { aromaticBondIds, shouldHighlightBondHalf, toBondId } from './aromaticBonds';
+import { aromaticBondIds, applyAromaticDisplay, shouldHighlightBondHalf, toBondId } from './aromaticBonds';
 
 describe('toBondId', () => {
     it('produces canonical min-max ordering', () => {
@@ -48,6 +48,69 @@ describe('aromaticBondIds', () => {
         const bonds: [number, number, number][] = [[5, 2, 1.5]];
         const ids = aromaticBondIds(bonds);
         expect(ids.has('2-5')).toBe(true);
+    });
+});
+
+describe('applyAromaticDisplay', () => {
+    const benzeneBonds: [number, number, number][] = [
+        [0, 1, 1.5], [1, 2, 1.5], [2, 3, 1.5],
+        [3, 4, 1.5], [4, 5, 1.5], [5, 0, 1.5],
+        [0, 6, 1.0], // a C-H bond (not aromatic)
+    ];
+    // Kekulé matching: doubles on 0-1, 2-3, 4-5; singles on the rest.
+    const kekule = { '0-1': 2, '1-2': 1, '2-3': 2, '3-4': 1, '4-5': 2, '0-5': 1 };
+
+    it('returns the bonds unchanged (same reference) when showAromaticRings is true', () => {
+        const out = applyAromaticDisplay(benzeneBonds, kekule, true);
+        expect(out).toBe(benzeneBonds);
+    });
+
+    it('returns the bonds unchanged when kekuleOrders is undefined', () => {
+        const out = applyAromaticDisplay(benzeneBonds, undefined, false);
+        expect(out).toBe(benzeneBonds);
+    });
+
+    it('swaps aromatic (1.5) bonds to their Kekulé order when off, leaving others intact', () => {
+        const out = applyAromaticDisplay(benzeneBonds, kekule, false);
+        const orderOf = (a: number, b: number) =>
+            out.find(([u, v]) => u === a && v === b)![2];
+        // alternating single/double around the ring
+        expect(orderOf(0, 1)).toBe(2);
+        expect(orderOf(1, 2)).toBe(1);
+        expect(orderOf(2, 3)).toBe(2);
+        expect(orderOf(3, 4)).toBe(1);
+        expect(orderOf(4, 5)).toBe(2);
+        expect(orderOf(5, 0)).toBe(1);
+        // the C-H single bond is untouched
+        expect(orderOf(0, 6)).toBe(1.0);
+        // exactly three double bonds were produced
+        expect(out.filter(([, , o]) => o === 2).length).toBe(3);
+    });
+
+    it('does not mutate the input array', () => {
+        const snapshot = JSON.parse(JSON.stringify(benzeneBonds));
+        applyAromaticDisplay(benzeneBonds, kekule, false);
+        expect(benzeneBonds).toEqual(snapshot);
+    });
+
+    it('leaves an aromatic bond at 1.5 when it has no Kekulé entry (safe fallback)', () => {
+        const bonds: [number, number, number][] = [[0, 1, 1.5], [1, 2, 1.5]];
+        const partial = { '0-1': 2 }; // 1-2 missing
+        const out = applyAromaticDisplay(bonds, partial, false);
+        expect(out.find(([u, v]) => u === 0 && v === 1)![2]).toBe(2);
+        expect(out.find(([u, v]) => u === 1 && v === 2)![2]).toBe(1.5);
+    });
+
+    it('looks up the Kekulé order by canonical min-max id (handles u > v)', () => {
+        const bonds: [number, number, number][] = [[5, 2, 1.5]];
+        const out = applyAromaticDisplay(bonds, { '2-5': 2 }, false);
+        expect(out[0][2]).toBe(2);
+    });
+
+    it('returns the same reference when off but no aromatic bond is actually swapped', () => {
+        const bonds: [number, number, number][] = [[0, 1, 1.0], [1, 2, 2.0]];
+        const out = applyAromaticDisplay(bonds, { '0-1': 2 }, false);
+        expect(out).toBe(bonds);
     });
 });
 

@@ -25,7 +25,7 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
     const { structureData, viewControls, visParams, sceneSettings, activeTabId } = useStructureStore();
     const { getAtomBaseColor } = useAtomColors();
     const meshRef = useRef<THREE.InstancedMesh>(null);
-    const { showBonds, showShadows } = viewControls;
+    const { showBonds, showShadows, showAromaticRings } = viewControls;
     const { renderStyle, cartoonParams, bondRadius } = visParams;
     // Aromatic torus tube tracks the bond radius (shared with the glb exporter),
     // so the Radius slider thickens the ring "donut" alongside the bonds.
@@ -93,9 +93,14 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
         // A fresh InstancedMesh starts with IDENTITY matrices (all rings at the world
         // origin, scale 1); processedRings/renderStyle don't change across that toggle,
         // so without showBonds here the remounted rings would stay stuck at the origin.
-    }, [processedRings, renderStyle, showBonds]);
+        // showAromaticRings is here for the same reason: toggling it off then on
+        // unmounts/remounts the mesh (via the early return below), and the fresh
+        // InstancedMesh needs its matrices repopulated.
+    }, [processedRings, renderStyle, showBonds, showAromaticRings]);
 
-    if (!showBonds || rings.length === 0) return null;
+    // showAromaticRings off: hide the torus (Bonds.tsx redraws the ring as Kekulé
+    // single/double bonds instead).
+    if (!showBonds || !showAromaticRings || rings.length === 0) return null;
 
     const shouldCastShadow = renderStyle === 'soft' && showShadows;
     const outlineThickness = renderStyle === 'cartoon' ? cartoonParams.outlineThickness : 1;

@@ -65,14 +65,20 @@ def atoms_to_rdkit_mol(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indic
                 
     return mol, old_to_new
 
-def detect_bonds_rdkit(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indices: Optional[List[int]] = None) -> Tuple[List[Tuple[int, int, float]], List[Tuple[List[float], List[float], float]]]:
+def detect_bonds_rdkit(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indices: Optional[List[int]] = None) -> Tuple[List[Tuple[int, int, float]], List[Tuple[List[float], List[float], float]], Dict[str, float]]:
     """
     Infer bond orders and aromatic rings using RDKit.
+
+    Returns ``(bonds, rings, kekule_orders)`` where ``kekule_orders`` maps each
+    aromatic bond's canonical "min-max" id to its Kekulé order (1.0 / 2.0). The
+    aromatic bonds themselves stay at order 1.5 in ``bonds``; the map lets the
+    frontend redraw them as alternating single/double when the aromatic-ring
+    torus is hidden, without recomputing chemistry client-side.
     """
     loaded = _load_rdkit()
     if not loaded:
         logger.warning("RDKit is not installed. Bond detection using RDKit skipped.")
-        return [], []
+        return [], [], {}
     Chem, rdDetermineBonds = loaded
 
     try:
@@ -113,12 +119,32 @@ def detect_bonds_rdkit(atoms: Atoms, bonds: List[Tuple[int, int]], cluster_indic
                         radii = np.linalg.norm(ring_pos - center, axis=1)
                         radius = float(np.mean(radii))
                         rings.append((center.tolist(), normal.tolist(), radius * 0.8))
-                        
-        return final_bonds, rings
-        
+
+        # Kekulé orders for aromatic bonds: clear aromatic flags on a COPY so the
+        # primary mol (and its 1.5 orders) is untouched, then read 1.0/2.0 for the
+        # bonds that were aromatic. Keyed by original-atom-index "min-max" bond id.
+        kekule_orders: Dict[str, float] = {}
+        try:
+            kmol = Chem.Mol(mol)
+            Chem.Kekulize(kmol, clearAromaticFlags=True)
+            for bond in kmol.GetBonds():
+                begin, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                aromatic_bond = mol.GetBondBetweenAtoms(begin, end)
+                if aromatic_bond is not None and aromatic_bond.GetBondTypeAsDouble() == 1.5:
+                    u = new_to_old[begin]
+                    v = new_to_old[end]
+                    kekule_orders[f"{min(u, v)}-{max(u, v)}"] = bond.GetBondTypeAsDouble()
+        except Exception:
+            # Some fused/charged aromatic systems can't be kekulized; degrade to
+            # no map (frontend then keeps single lines when the torus is hidden).
+            logger.exception("[RDKit Bridge] Kekulize failed; aromatic bonds will lack Kekulé orders")
+            kekule_orders = {}
+
+        return final_bonds, rings, kekule_orders
+
     except Exception:
         # Capture the full traceback so this RDKit fallback path can be
         # diagnosed when bond order inference quietly returns nothing.
         logger.exception("[RDKit Bridge] DetermineBondOrders failed")
-        return [], []
+        return [], [], {}
 

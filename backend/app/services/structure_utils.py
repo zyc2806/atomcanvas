@@ -133,8 +133,9 @@ def atoms_to_response(
                 fixed_atoms_indices.extend(constr.get_indices())
 
     # 2. Calculate Geometry (Bonds & Ghost Bonds)
+    kekule_orders: Dict[str, float] = {}
     bonds, wrapped_ghost_bonds, rings = get_bonds_and_ghosts(
-        atoms, bond_scale=bond_scale, bond_overrides=bond_overrides
+        atoms, bond_scale=bond_scale, bond_overrides=bond_overrides, kekule_out=kekule_orders
     )
 
     wrapped_h_bonds, unwrapped_h_bonds = calc_h_bond_geometries(
@@ -171,5 +172,6 @@ def atoms_to_response(
             ),
             labels=atom_labels,
             fixed_atoms=sorted(set(int(index) for index in fixed_atoms_indices)),
+            kekule_orders=kekule_orders,
         ),
     )

@@ -7,6 +7,7 @@ import useAtomColors from '../../hooks/useAtomColors';
 import './materials/ToonHighlightMaterial';
 
 import { getNearestAtomIndexToRing, aromaticInstancedMeshKey, applyAromaticRingInstances, resolveAromaticRingColor } from './aromaticRingsUtils';
+import { displayPositions } from './displayPositions';
 import { ringTubeRadius } from '../../utils/ringGeometry';
 
 interface AromaticRingsProps {
@@ -49,7 +50,11 @@ const AromaticRings: React.FC<AromaticRingsProps> = ({ structure }) => {
         const data: RingData[] = [];
         const defaultNormal = new THREE.Vector3(0, 0, 1);
         const symbols = activeStructure?.structure?.symbols || [];
-        const rawPositions = activeStructure?.structure?.positions || [];
+        // Ring centers are computed in the wrapped (in-cell) basis on the backend,
+        // so the nearest-atom color lookup must use the same wrapped display
+        // positions — not raw — or it picks the wrong atom (and color) for an
+        // out-of-cell periodic ring.
+        const rawPositions = activeStructure ? displayPositions(activeStructure.structure) : [];
         const positions: [number, number, number][] = [];
         for (const pos of rawPositions) {
             if (pos.length >= 3) {

@@ -19,14 +19,26 @@ describe('computeLod', () => {
         });
     });
 
+    describe('empty / closed scene (0 atoms) disables ambient occlusion', () => {
+        it('computeLod(0).enableAO is false — no full-screen AO pass on an empty/closed scene', () => {
+            // A closed viewer (structureData null -> atomCount 0) must not keep
+            // running the N8AO post-pass forever; it has nothing to occlude.
+            expect(computeLod(0).enableAO).toBe(false);
+        });
+
+        it('a real 1-atom structure still enables AO', () => {
+            expect(computeLod(1).enableAO).toBe(true);
+        });
+    });
+
     describe('full-detail tier (n < 2000)', () => {
-        it('returns full detail for 0 atoms', () => {
+        it('returns full detail (but AO off) for 0 atoms', () => {
             expect(computeLod(0)).toEqual({
                 sphereSegments: 32,
                 cylinderRadialSegments: 8,
                 showOutlines: true,
                 showBonds: true,
-                enableAO: true,
+                enableAO: false,
                 showLabels: true,
             });
         });

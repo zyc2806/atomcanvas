@@ -92,8 +92,25 @@ describe('cartoon outline / material policy', () => {
     });
   });
 
-  it('cartoon outline is always shown regardless of opacity', () => {
+  it('cartoon outline is shown when nothing is hidden, regardless of opacity', () => {
     expect(shouldShowCartoonOutline(1)).toBe(true);
     expect(shouldShowCartoonOutline(0.2)).toBe(true);
+  });
+
+  it('cartoon enables alpha-hash only when hidden atoms exist (so the toon shader discards them)', () => {
+    expect(getCartoonMaterialRenderState(0.5, false)).toEqual({
+      transparent: false,
+      depthWrite: true,
+      alphaHash: false,
+    });
+    expect(getCartoonMaterialRenderState(0.5, true)).toEqual({
+      transparent: false,
+      depthWrite: true,
+      alphaHash: true,
+    });
+  });
+
+  it('cartoon outline is dropped when hidden atoms exist (no leftover inverted-hull shell)', () => {
+    expect(shouldShowCartoonOutline(1, true)).toBe(false);
   });
 });

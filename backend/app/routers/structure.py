@@ -26,6 +26,7 @@ from ..services.structure_utils import (
     atoms_from_dict,
     atoms_to_response,
     atoms_to_structure,
+    wrap_atoms_for_display,
 )
 from ..services.format_capabilities import (
     WarningSeverity,
@@ -190,6 +191,11 @@ async def upload_structure(file: UploadFile = File(...)):
                 step = len(frames) // 100
                 frames = frames[::step]
 
+            # Trajectory frames keep RAW, continuous coordinates so MD playback
+            # does not teleport atoms across PBC boundaries between frames. Each
+            # Structure still carries its own wrapped_positions for any wrapped
+            # display; the static main structure is wrapped-for-geometry via
+            # atoms_to_response(atoms_list[0]) below.
             trajectory_data = [atoms_to_structure(f) for f in frames]
 
             atoms = atoms_list[0]
@@ -220,6 +226,9 @@ async def update_visualization(request: UpdateStructureRequest):
     try:
         # Use atoms_from_dict to correctly handle nested structure and visualization (fixed_atoms)
         atoms = atoms_from_dict(request.structure.model_dump())
+        # Recompute bonds in the same wrapped basis the upload/edit paths serialize,
+        # so ghost stubs stay anchored to the positions the renderer already holds.
+        atoms = wrap_atoms_for_display(atoms)
 
         params = request.params
         bond_diagnostics_payload: dict[str, Any] | None = (

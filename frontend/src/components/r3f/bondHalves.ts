@@ -148,8 +148,16 @@ export function computeBondHalves(params: ComputeBondHalvesParams): BondHalf[] {
         return getModeAdjustedAtomRadius(elementRadius, atomScale, displayMode, radiusOverrides?.[atomIndex] ?? 1);
     };
 
+    // In cartoon a bond half is opaque at the global base opacity (cartoon
+    // ignores partial transparency), EXCEPT a half adjacent to a fully-hidden
+    // atom (opacity override 0) must itself be 0 so the toon material's
+    // alpha-hash discards it — otherwise hiding an atom in cartoon leaves its
+    // bonds dangling to an invisible atom.
+    const cartoonHalfOpacity = (atomIndex: number): number =>
+        getAtomOpacity(atomIndex) === 0 ? 0 : getAtomBaseOpacity();
+
     const isAtomTransparent = (atomIndex: number): boolean => {
-        const op = renderStyle === 'cartoon' ? getAtomBaseOpacity() : getAtomOpacity(atomIndex);
+        const op = renderStyle === 'cartoon' ? cartoonHalfOpacity(atomIndex) : getAtomOpacity(atomIndex);
         return isOpacityTransparent(op);
     };
 
@@ -265,7 +273,7 @@ export function computeBondHalves(params: ComputeBondHalvesParams): BondHalf[] {
                 radiusScale: radiusScale * (order >= 2.0 ? 0.6 : 1.0),
                 color: getAtomColor(idx1, symbols[idx1]),
                 opacity: renderStyle === 'cartoon'
-                    ? getAtomBaseOpacity()
+                    ? cartoonHalfOpacity(idx1)
                     : resolveBondHalfOpacity(getAtomOpacity(idx1), bondOpacityOverrides?.[bondId]),
             });
 
@@ -281,7 +289,7 @@ export function computeBondHalves(params: ComputeBondHalvesParams): BondHalf[] {
                 radiusScale: radiusScale * (order >= 2.0 ? 0.6 : 1.0),
                 color: getAtomColor(idx2, symbols[idx2]),
                 opacity: renderStyle === 'cartoon'
-                    ? getAtomBaseOpacity()
+                    ? cartoonHalfOpacity(idx2)
                     : resolveBondHalfOpacity(getAtomOpacity(idx2), bondOpacityOverrides?.[bondId]),
             });
         }
@@ -301,7 +309,7 @@ export function computeBondHalves(params: ComputeBondHalvesParams): BondHalf[] {
         const color = getAtomColor(atomIdx, symbol);
         const bondId = `${Math.min(atomIdx, otherIdx)}-${Math.max(atomIdx, otherIdx)}`;
         const opacity = renderStyle === 'cartoon'
-            ? getAtomBaseOpacity()
+            ? cartoonHalfOpacity(atomIdx)
             : resolveBondHalfOpacity(getAtomOpacity(atomIdx), bondOpacityOverrides?.[bondId]);
         const radiusScale = getBondRadiusScale(symbol, symbol);
         const startAtomRadius = getRenderedRadius(atomIdx);

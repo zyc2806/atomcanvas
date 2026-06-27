@@ -26,6 +26,8 @@ import { hasAnyTransparentOverrides } from './materials/opacityPolicy';
 import { elementStylesToAtomOverrides } from '../../services/elementStyleApply';
 import { selectFramePositions } from '../../utils/trajectory';
 import { computeLod } from './lod';
+import { resolveFrameloop, isAutomatedBrowser } from './frameloopPolicy';
+import { displayPositions } from './displayPositions';
 import type { LodSettings } from './lod';
 import { computeFitBounds, computeFramingDistance } from './fitBounds';
 
@@ -120,9 +122,17 @@ const CameraAnimator: React.FC = () => {
         const p1 = easing.damp3(state.camera.position, targetPos.current, 0.25, delta);
         const p2 = easing.damp3(controlsApi.target, targetLookAt.current, 0.25, delta);
         const p3 = easing.damp3(state.camera.up, targetUp.current, 0.25, delta);
-        
+
         if (!p1 && !p2 && !p3) {
             isAnimating.current = false;
+        } else {
+            // Still easing: under frameloop="demand" request the next frame so the
+            // camera animation runs to completion instead of rendering one frame
+            // and freezing mid-motion. (No-op under frameloop="always".)
+            state.invalidate();
+        }
+
+        if (!isAnimating.current) {
             if (persistOnAnimationComplete.current) {
                 const controlsTarget = controlsApi.target;
                 const target = controlsTarget
@@ -262,13 +272,27 @@ const RenderInvalidator: React.FC = () => {
         }
 
         const unsubscribe = subscribe((state, prevState) => {
-            const viewChanged = state.viewControls.showAxesGizmo !== prevState.viewControls.showAxesGizmo
-                || state.viewControls.forceTransparentBackground !== prevState.viewControls.forceTransparentBackground;
-            const cameraChanged = state.cameraType !== prevState.cameraType;
-            const styleChanged = state.visParams.renderStyle !== prevState.visParams.renderStyle;
+            // Under frameloop="demand" the canvas only redraws when something asks
+            // it to. The store is the single source of truth for everything drawn
+            // (positions, selection, hover, colors, opacity, currentFrame, view
+            // controls, camera), so ANY store change must schedule a frame —
+            // otherwise trajectory playback, selection highlights, hide/show, etc.
+            // would visibly freeze. invalidate() coalesces, so multiple changes
+            // before the next frame cost a single redraw; an idle store schedules
+            // nothing and the app returns to true idle. (No-op under "always".)
+            const needsDoubleInvalidate =
+                state.viewControls.showAxesGizmo !== prevState.viewControls.showAxesGizmo
+                || state.viewControls.forceTransparentBackground !== prevState.viewControls.forceTransparentBackground
+                || state.cameraType !== prevState.cameraType
+                || state.visParams.renderStyle !== prevState.visParams.renderStyle;
 
-            if (viewChanged || cameraChanged || styleChanged) {
+            // Some changes (gizmo toggle, background, camera kind, render style)
+            // need a second frame to settle the compositor/gizmo — double-invalidate
+            // those; everything else needs a single frame.
+            if (needsDoubleInvalidate) {
                 invalidateTwice();
+            } else {
+                invalidate();
             }
         });
 
@@ -597,7 +621,10 @@ const ViewerCanvas: React.FC<ViewerCanvasProps> = ({ children, center = [0, 0, 0
     // Derive the structure's centroid and bounding radius so the camera can frame
     // it adaptively. Falls back to the `center` prop / origin when no structure.
     const { fitCenter, fitRadius } = useMemo(() => {
-        const positions = structureData?.structure.positions;
+        // Frame the DISPLAYED (wrapped, in-cell) atoms, not the raw canonical
+        // positions — otherwise an out-of-cell periodic structure would aim the
+        // camera at empty space where the un-wrapped atoms used to be.
+        const positions = structureData ? displayPositions(structureData.structure) : undefined;
         const { center: fitCenter, radius: fitRadius } = computeFitBounds(positions, center);
         return { fitCenter, fitRadius };
     }, [structureData, center]);
@@ -611,9 +638,16 @@ const ViewerCanvas: React.FC<ViewerCanvasProps> = ({ children, center = [0, 0, 0
     // or unmounts (renderStyle toggles), exposing the composer to the exporter.
     const [composer, setComposer] = useState<CaptureHandle['composer']>(null);
 
+    // Real users render on demand (idle = 0 GPU, even with a structure open or
+    // after closing one); automated browsers (render CLI + e2e) stay on the
+    // continuous loop so the headless frame-counter capture handshake holds.
+    const frameloop = resolveFrameloop(
+        typeof navigator !== 'undefined' && isAutomatedBrowser(navigator),
+    );
+
     return (
         <div style={{ width: '100%', height: '100%' }}>
-            <Canvas shadows={showShadows} gl={{ preserveDrawingBuffer: true, alpha: true }} onContextMenu={(e) => e.preventDefault()}>
+            <Canvas frameloop={frameloop} shadows={showShadows} gl={{ preserveDrawingBuffer: true, alpha: true }} onContextMenu={(e) => e.preventDefault()}>
                 <Background />
                 <CameraManager />
                 <Lighting />

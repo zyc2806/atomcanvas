@@ -15,6 +15,7 @@ import { downloadBlob, uniqueName } from './download';
 import { buildSceneDocument, buildStylePreset } from './sceneDocument';
 import type { StandardStructureObject, StructureState, ElementStyle } from '../types/store';
 import { getCaptureHandle } from './captureHandle';
+import { displayPositions } from '../components/r3f/displayPositions';
 import { Vector2 } from 'three';
 import type { PerspectiveCamera } from 'three';
 
@@ -79,7 +80,11 @@ export function buildSceneForDoc(doc: StandardStructureObject, tabId?: string) {
   // sizing. Per-atom color/size/opacity, per-bond opacity, and the render style
   // are forwarded so the glb matches the live, edited scene.
   return buildExportScene(
-    { symbols, positions: doc.structure.positions, cell: doc.structure.cell },
+    // Build the exported model in the DISPLAYED (wrapped, in-cell) basis so a
+    // GLB / batch image matches what the viewer shows (atoms + bonds + ghost
+    // stubs aligned, no cell-spanning bonds). Data exports (/export CIF/XYZ) use
+    // the raw canonical positions on the backend instead.
+    { symbols, positions: displayPositions(doc.structure), cell: doc.structure.cell },
     { bonds: doc.visualization.bonds, rings: doc.visualization.rings },
     { elements: elementsForTab(s, tabId), bondsStyle: s.bondsStyle, bondRadius: s.visParams.bondRadius },
     elementData,

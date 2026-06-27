@@ -16,6 +16,7 @@ import {
 import { pickAtomMaterialKind } from './materials/materialKind';
 import { syncMaterialAlphaHash } from './materials/materialUpdate';
 import { computeAtomDisplayData, WIREFRAME_HIT_SCALE } from './atomDisplayData';
+import { displayPositions } from './displayPositions';
 import AtomLabels from './AtomLabels';
 import type { LodSettings } from './lod';
 
@@ -72,7 +73,7 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
 
     const atomsData = useMemo(() => {
         if (!structureData) return [];
-        const positions = customPositions || structureData.structure.positions;
+        const positions = customPositions || displayPositions(structureData.structure);
         const symbols = structureData.structure.symbols;
         return computeAtomDisplayData({
             positions,
@@ -88,15 +89,18 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
     }, [structureData, customPositions, atomScale, displayMode, getAtomBaseOpacity, getAtomColor, getAtomOpacity, renderStyle, radiusOverrides]);
 
     const alphaArray = useMemo(() => {
-        if (!structureData) return new Float32Array(0);
-        const positions = customPositions || structureData.structure.positions;
-        const count = positions.length;
+        // Drive instanceAlpha from the SAME (cartoon-clamped) opacity used for
+        // hasTransparentAtoms, not the raw getAtomOpacity. In cartoon this yields
+        // 0 for a hidden atom (discarded) and 1.0 for a partial atom (opaque) —
+        // so hiding one atom can't accidentally alpha-hash-dither a partially
+        // transparent atom. For standard/soft atomsData.opacity === getAtomOpacity.
+        const count = atomsData.length;
         const array = new Float32Array(count);
         for (let i = 0; i < count; i++) {
-            array[i] = getAtomOpacity(i);
+            array[i] = atomsData[i].opacity;
         }
         return array;
-    }, [structureData, customPositions, getAtomOpacity]);
+    }, [atomsData]);
 
     useLayoutEffect(() => {
         if (!meshRef.current) return;
@@ -110,7 +114,7 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
     useLayoutEffect(() => {
         if (!structureData || !meshRef.current) return;
         
-        const positions = customPositions || structureData.structure.positions;
+        const positions = customPositions || displayPositions(structureData.structure);
         const symbols = structureData.structure.symbols;
         const count = positions.length;
         const dummy = new THREE.Object3D();
@@ -140,15 +144,15 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
     const isCartoon = renderStyle === 'cartoon';
     const hasTransparentAtoms = atomsData.some((atom) => isOpacityTransparent(atom.opacity));
     const instancedMaterialState = getInstancedMaterialRenderState(renderStyle, hasTransparentAtoms);
-    // Cartoon keeps its historical render state (opaque, no alpha-hash): the toon
-    // shader applied per-mesh opacity to gl_FragColor.a but ran with transparent=false,
-    // so atom opacity never actually blended. Preserve that exactly on the instanced path.
-    const cartoonMatState = getCartoonMaterialRenderState(getAtomBaseOpacity());
+    // Cartoon stays opaque (no partial-transparency blending), but enables
+    // alpha-hash when an atom is hidden so the toon shader discards the alpha-0
+    // instance — without it, hidden atoms render fully visible in cartoon mode.
+    const cartoonMatState = getCartoonMaterialRenderState(getAtomBaseOpacity(), hasTransparentAtoms);
     const materialTransparent = isWireframe ? true : isCartoon ? cartoonMatState.transparent : instancedMaterialState.transparent;
     const materialAlphaHash = isWireframe ? false : isCartoon ? cartoonMatState.alphaHash : instancedMaterialState.alphaHash;
     const showOutlineForStyle =
         renderStyle === 'cartoon'
-            ? shouldShowCartoonOutline(getAtomBaseOpacity())
+            ? shouldShowCartoonOutline(getAtomBaseOpacity(), hasTransparentAtoms)
             : renderStyle === 'standard'
                 ? !hasTransparentAtoms
                 : renderStyle !== 'soft' || showOutline;
@@ -157,12 +161,18 @@ const Atoms: React.FC<AtomsProps> = ({ customPositions, radiusOverrides, colorOv
         if (!meshRef.current) return;
         const material = meshRef.current.material as THREE.Material & { alphaHash: boolean };
         syncMaterialAlphaHash(material, materialAlphaHash);
-    }, [materialAlphaHash]);
+        // renderStyle is in the deps so this re-runs after the material element
+        // swaps (e.g. standard meshStandardMaterial → cartoon toonMaterial). That
+        // SEEDS the new material's alphaHash tracker, so a later hide (alphaHash
+        // false→true) is detected as a real change and the shader recompiles with
+        // USE_ALPHAHASH. Without it, hiding an atom after a standard→cartoon swap
+        // would not recompile and the hidden atom would stay visible.
+    }, [materialAlphaHash, renderStyle]);
 
     if (!structureData) return null;
 
     const count = customPositions ? customPositions.length : structureData.structure.positions.length;
-    const labelPositions = customPositions || structureData.structure.positions;
+    const labelPositions = customPositions || displayPositions(structureData.structure);
     const labelSymbols = structureData.structure.symbols;
 
     const handleClick = (e: ThreeEvent<MouseEvent>) => {

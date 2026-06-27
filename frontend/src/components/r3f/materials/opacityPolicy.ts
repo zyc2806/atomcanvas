@@ -60,16 +60,28 @@ export const getInstancedMaterialRenderState = (
   };
 };
 
-export const getCartoonMaterialRenderState = (opacity: number): CartoonMaterialRenderState => {
+export const getCartoonMaterialRenderState = (
+  opacity: number,
+  hasHiddenAtoms = false
+): CartoonMaterialRenderState => {
   void opacity;
+  // Cartoon stays opaque (no partial-transparency blending), but when atoms are
+  // hidden (alpha 0) it must enable alpha-hash so the toon shader discards those
+  // fully-transparent instances instead of writing them opaque.
   return {
     transparent: false,
     depthWrite: true,
-    alphaHash: false,
+    alphaHash: hasHiddenAtoms,
   };
 };
 
-export const shouldShowCartoonOutline = (opacity: number): boolean => {
+export const shouldShowCartoonOutline = (
+  opacity: number,
+  hasHiddenAtoms = false
+): boolean => {
   void opacity;
-  return true;
+  // Drop the inverted-hull outline when any atom is hidden (mirrors standard
+  // mode's `!hasTransparentAtoms` gate); otherwise the outline shell of a
+  // discarded atom would linger as a black blob at its position.
+  return !hasHiddenAtoms;
 };

@@ -29,8 +29,9 @@ describe('selectFramePositions', () => {
     expect(selectFramePositions(doc(1), 0)).toBeNull();
   });
 
-  it('returns null on frame 0 so the frame-0 render path is untouched', () => {
-    expect(selectFramePositions(doc(5), 0)).toBeNull();
+  it('returns RAW frame-0 positions for a multi-frame trajectory (one continuous basis — no wrapped-vs-raw teleport at the 0↔1 boundary)', () => {
+    const d = doc(5);
+    expect(selectFramePositions(d, 0)).toEqual(d.trajectory![0].positions);
   });
 
   it('returns the requested frame positions for a valid non-zero frame', () => {
@@ -39,8 +40,9 @@ describe('selectFramePositions', () => {
     expect(selectFramePositions(d, 4)).toEqual(d.trajectory![4].positions);
   });
 
-  it('returns null for an out-of-range frame index', () => {
-    expect(selectFramePositions(doc(5), 99)).toBeNull();
-    expect(selectFramePositions(doc(5), -1)).toBeNull();
+  it('clamps an out-of-range frame index to the nearest valid frame', () => {
+    const d = doc(5);
+    expect(selectFramePositions(d, 99)).toEqual(d.trajectory![4].positions);
+    expect(selectFramePositions(d, -1)).toEqual(d.trajectory![0].positions);
   });
 });

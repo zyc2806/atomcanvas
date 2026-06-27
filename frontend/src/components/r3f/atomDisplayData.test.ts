@@ -84,7 +84,7 @@ describe('computeAtomDisplayData', () => {
         expect(wfResult[0].scale).toBeCloseTo(bsResult[0].scale * 0.3);
     });
 
-    it('uses getAtomBaseOpacity in cartoon render style', () => {
+    it('uses getAtomBaseOpacity in cartoon render style for a visible (non-hidden) atom', () => {
         const getAtomBaseOpacity = vi.fn(() => 0.4);
         const getAtomOpacity = vi.fn(() => 0.9);
         const result = computeAtomDisplayData(makeParams({
@@ -93,9 +93,35 @@ describe('computeAtomDisplayData', () => {
             getAtomBaseOpacity,
             getAtomOpacity,
         }));
+        // A non-hidden atom (opacity 0.9 != 0) maps to the global cartoon base (0.4),
+        // not its per-atom value — cartoon ignores partial transparency.
         expect(result[0].opacity).toBeCloseTo(0.4);
         expect(getAtomBaseOpacity).toHaveBeenCalled();
-        expect(getAtomOpacity).not.toHaveBeenCalled();
+        // getAtomOpacity is now consulted to detect the fully-hidden (0) sentinel.
+        expect(getAtomOpacity).toHaveBeenCalled();
+    });
+
+    it('cartoon: a fully-hidden atom (opacity 0) stays hidden (opacity 0), so the toon shader can discard it', () => {
+        // Hiding an atom sets its opacity override to 0. In cartoon mode this must
+        // flow through so the atom is actually removed, instead of being forced
+        // back to the (opaque) base opacity and rendered fully visible.
+        const result = computeAtomDisplayData(makeParams({
+            positions: [[0, 0, 0]], symbols: ['C'],
+            renderStyle: 'cartoon',
+            getAtomBaseOpacity: () => 0.4,
+            getAtomOpacity: () => 0, // atom hidden
+        }));
+        expect(result[0].opacity).toBe(0);
+    });
+
+    it('cartoon: a PARTIAL opacity still maps to the base opacity (cartoon ignores partial transparency by design)', () => {
+        const result = computeAtomDisplayData(makeParams({
+            positions: [[0, 0, 0]], symbols: ['C'],
+            renderStyle: 'cartoon',
+            getAtomBaseOpacity: () => 0.4,
+            getAtomOpacity: () => 0.5, // partially transparent, not hidden
+        }));
+        expect(result[0].opacity).toBeCloseTo(0.4);
     });
 
     it('uses per-atom getAtomOpacity for non-cartoon render styles', () => {

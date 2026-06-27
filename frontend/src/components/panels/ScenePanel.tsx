@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useStructureStore } from '../../store/useStructureStore';
 import { ColorSwatch } from '../common/ColorSwatch';
+import { displayPositions } from '../r3f/displayPositions';
 import type { CartoonParams, LightingPreset } from '../../types/store';
 
 type Vec3 = [number, number, number];
@@ -99,8 +100,10 @@ export function ScenePanel() {
   const setBackground = useStructureStore((s) => s.setBackground);
   const setGlobalBrightness = useStructureStore((s) => s.setGlobalBrightness);
 
+  // Camera presets aim at the centroid of the DISPLAYED (wrapped, in-cell)
+  // atoms so an out-of-cell periodic structure doesn't frame empty space.
   const positions = useMemo<Vec3[]>(
-    () => structureData?.structure.positions ?? [],
+    () => (structureData ? (displayPositions(structureData.structure) as Vec3[]) : []),
     [structureData],
   );
   const hasStructure = positions.length > 0;

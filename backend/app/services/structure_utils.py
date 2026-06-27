@@ -74,6 +74,32 @@ def atoms_from_dict(structure_dict: dict[str, object]) -> ase.Atoms:
     return atoms
 
 
+def wrap_atoms_for_display(atoms: ase.Atoms) -> ase.Atoms:
+    """Return a copy with atoms wrapped into the unit cell for periodic structures.
+
+    The renderer draws atoms and regular bonds from the serialized positions, while
+    cross-boundary "ghost" bond stubs are computed in the wrapped basis. If the input
+    atoms are not already inside the cell (symmetry-expanded P1 CIFs, slabs,
+    super-cells, translated/edited structures), those two bases disagree and bonds
+    render as fragments spanning the whole cell. Wrapping once here, before bonds are
+    computed and before serialization, makes raw == wrapped everywhere so atoms,
+    regular bonds, and ghost stubs all line up (VESTA-style PBC rendering).
+
+    Non-periodic structures (or periodic ones with a degenerate/zero cell) are
+    returned unchanged. The copy preserves custom arrays (uuid) and constraints.
+    """
+    if not (atoms.pbc.any() and np.any(atoms.get_cell())):
+        return atoms
+    wrapped = atoms.copy()
+    try:
+        wrapped.wrap()
+    except Exception:
+        # A degenerate cell can make wrap() raise; fall back to the original atoms
+        # rather than failing the whole request.
+        return atoms
+    return wrapped
+
+
 def atoms_to_structure(atoms: ase.Atoms) -> Structure:
     wrapped_positions = atoms.get_positions()
     if atoms.pbc.any() and np.any(atoms.get_cell()):
@@ -125,6 +151,14 @@ def atoms_to_response(
     if bond_overrides is None:
         bond_overrides = {}
 
+    # Compute geometry (bonds + ghost stubs + H-bonds) in the WRAPPED (in-cell)
+    # basis so regular bonds and cross-boundary ghost stubs line up with the
+    # displayed wrapped_positions and nothing spans the whole cell. The canonical
+    # `atoms` (and the serialized `positions`) stay RAW so /export, edits, and the
+    # translate(wrap=false) toggle round-trip the user's original coordinates.
+    # For non-periodic structures geom_atoms == atoms (no-op).
+    geom_atoms = wrap_atoms_for_display(atoms)
+
     # 1. Extract constraints and find fixed atoms
     fixed_atoms_indices: list[int] = []
     if atoms.constraints:
@@ -132,14 +166,14 @@ def atoms_to_response(
             if isinstance(constr, FixAtoms):
                 fixed_atoms_indices.extend(constr.get_indices())
 
-    # 2. Calculate Geometry (Bonds & Ghost Bonds)
+    # 2. Calculate Geometry (Bonds & Ghost Bonds) in the wrapped basis
     kekule_orders: Dict[str, float] = {}
     bonds, wrapped_ghost_bonds, rings = get_bonds_and_ghosts(
-        atoms, bond_scale=bond_scale, bond_overrides=bond_overrides, kekule_out=kekule_orders
+        geom_atoms, bond_scale=bond_scale, bond_overrides=bond_overrides, kekule_out=kekule_orders
     )
 
     wrapped_h_bonds, unwrapped_h_bonds = calc_h_bond_geometries(
-        atoms,
+        geom_atoms,
         distance_cutoff=h_bond_distance_cutoff,
         angle_cutoff=h_bond_angle_cutoff,
     )

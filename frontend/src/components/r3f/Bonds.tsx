@@ -14,6 +14,7 @@ import {
 import { pickAtomMaterialKind } from './materials/materialKind';
 import { syncMaterialAlphaHash } from './materials/materialUpdate';
 import { computeBondHalves } from './bondHalves';
+import { displayPositions } from './displayPositions';
 import type { BondHalf, WrappedGhostBond } from './bondHalves';
 import type { LodSettings } from './lod';
 import { applyAromaticDisplay, aromaticBondIds, shouldHighlightBondHalf } from '../../utils/aromaticBonds';
@@ -79,7 +80,11 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
             symbols = activeStructure?.structure?.symbols || [];
         } else {
             if (!activeStructure || !activeStructure.visualization) return [];
-            positions = activeStructure.structure.positions;
+            // Draw regular bonds in the wrapped (in-cell) display basis so they
+            // line up with the wrapped atoms and ghost stubs (no cell-spanning
+            // bonds); canonical positions stay raw for export. Trajectory frames
+            // (custom mode above) keep their own raw, continuous positions.
+            positions = displayPositions(activeStructure.structure);
             // When the aromatic-ring torus is hidden, redraw aromatic bonds as
             // their Kekulé single/double orders (no-op when the toggle is on).
             bonds = applyAromaticDisplay(
@@ -186,24 +191,29 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
     const bondMaterialKind = pickAtomMaterialKind(renderStyle);
     const hasTransparentBondHalves = bondHalves.some((half) => isOpacityTransparent(half.opacity));
     const instancedMaterialState = getInstancedMaterialRenderState(renderStyle, hasTransparentBondHalves);
-    // Cartoon keeps its historical render state (opaque, no alpha-hash): the toon
-    // shader wrote per-half opacity to gl_FragColor.a but ran with transparent=false,
-    // so bond opacity never blended. Preserve that exactly on the instanced path.
-    const cartoonMatState = getCartoonMaterialRenderState(getAtomBaseOpacity());
+    // Cartoon stays opaque (no partial-transparency blending), but enables
+    // alpha-hash when a bond half is hidden (adjacent to a hidden atom) so the
+    // toon shader discards those alpha-0 halves — otherwise hiding an atom in
+    // cartoon leaves its bonds dangling to an invisible atom.
+    const cartoonMatState = getCartoonMaterialRenderState(getAtomBaseOpacity(), hasTransparentBondHalves);
     const materialTransparent = isCartoon ? cartoonMatState.transparent : instancedMaterialState.transparent;
     const materialAlphaHash = isCartoon ? cartoonMatState.alphaHash : instancedMaterialState.alphaHash;
     const shouldCastShadow = renderStyle === 'soft' && showShadows;
     const outlineThickness = isCartoon ? cartoonParams.outlineThickness : 1;
-    // Cartoon always drew the inverted-hull outline (shouldShowCartoonOutline policy);
-    // standard only when fully opaque.
-    const showInstancedOutline = (isCartoon && shouldShowCartoonOutline(getAtomBaseOpacity()))
+    // Cartoon draws the inverted-hull outline unless a half is hidden (mirrors
+    // standard's `!hasTransparentBondHalves` gate, so a hidden bond leaves no
+    // outline shell); standard only when fully opaque.
+    const showInstancedOutline = (isCartoon && shouldShowCartoonOutline(getAtomBaseOpacity(), hasTransparentBondHalves))
         || (renderStyle === 'standard' && !hasTransparentBondHalves);
 
     useLayoutEffect(() => {
         if (!meshRef.current) return;
         const material = meshRef.current.material as THREE.Material & { alphaHash: boolean };
         syncMaterialAlphaHash(material, materialAlphaHash);
-    }, [materialAlphaHash]);
+        // renderStyle in deps re-seeds the alphaHash tracker after the bond
+        // material element swaps (standard ⇄ cartoon), so a later hide recompiles
+        // the toon shader with USE_ALPHAHASH (mirrors the Atoms.tsx fix).
+    }, [materialAlphaHash, renderStyle]);
 
     if (!isCustomMode && (!activeStructure || !activeStructure.visualization || !activeStructure.visualization.bonds)) return null;
     if (displayMode === 'vdw' || !showBonds) return null;

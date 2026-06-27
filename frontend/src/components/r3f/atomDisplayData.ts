@@ -63,7 +63,14 @@ export function computeAtomDisplayData(params: ComputeAtomDisplayDataParams): At
             position: new THREE.Vector3(pos[0], pos[1], pos[2]),
             scale,
             color: getAtomColor(i, symbols[i]),
-            opacity: renderStyle === 'cartoon' ? getAtomBaseOpacity() : getAtomOpacity(i),
+            // Cartoon uses a single global base opacity (it ignores partial
+            // per-atom transparency by design), BUT a fully-hidden atom
+            // (opacity override 0) must still flow through as 0 so the toon
+            // material's alpha-hash discards it. Otherwise hiding an atom in
+            // cartoon mode leaves it fully visible.
+            opacity: renderStyle === 'cartoon'
+                ? (getAtomOpacity(i) === 0 ? 0 : getAtomBaseOpacity())
+                : getAtomOpacity(i),
         };
     });
 }

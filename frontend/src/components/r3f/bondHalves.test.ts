@@ -122,9 +122,9 @@ describe('computeBondHalves — order-3 bond', () => {
 // Per-half opacity — cartoon vs non-cartoon
 // ---------------------------------------------------------------------------
 describe('computeBondHalves — opacity', () => {
-    it('uses getAtomBaseOpacity for the cartoon render style', () => {
+    it('uses getAtomBaseOpacity for visible (non-hidden) atoms in the cartoon render style', () => {
         const getAtomBaseOpacity = vi.fn(() => 0.5);
-        const getAtomOpacity = vi.fn(() => 0.9);
+        const getAtomOpacity = vi.fn(() => 0.9); // visible (non-zero) both atoms
         const params = makeBaseParams({
             renderStyle: 'cartoon',
             getAtomBaseOpacity,
@@ -133,7 +133,24 @@ describe('computeBondHalves — opacity', () => {
         const halves = computeBondHalves(params);
         halves.forEach((h) => expect(h.opacity).toBeCloseTo(0.5));
         expect(getAtomBaseOpacity).toHaveBeenCalled();
-        expect(getAtomOpacity).not.toHaveBeenCalled();
+        // getAtomOpacity is now consulted to detect the fully-hidden (0) sentinel.
+        expect(getAtomOpacity).toHaveBeenCalled();
+    });
+
+    it('cartoon: a bond half adjacent to a HIDDEN atom (opacity 0) is itself 0, so it is discarded with the atom', () => {
+        const getAtomBaseOpacity = () => 1.0;
+        // atom 0 hidden, atom 1 visible
+        const getAtomOpacity = (idx: number) => (idx === 0 ? 0 : 1.0);
+        const params = makeBaseParams({
+            renderStyle: 'cartoon',
+            getAtomBaseOpacity,
+            getAtomOpacity,
+        });
+        const halves = computeBondHalves(params);
+        const half0 = halves.find((h) => h.atomIndex === 0)!;
+        const half1 = halves.find((h) => h.atomIndex === 1)!;
+        expect(half0.opacity).toBe(0);     // hidden atom's half → discarded
+        expect(half1.opacity).toBeCloseTo(1.0); // visible atom's half → opaque base
     });
 
     it('uses per-atom getAtomOpacity for non-cartoon render styles', () => {

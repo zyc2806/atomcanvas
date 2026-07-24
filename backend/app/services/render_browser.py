@@ -70,6 +70,7 @@ def render_structure(
     show_pbc_bonds: bool = True,
     autoframe: bool = True,
     camera_view: dict | None = None,
+    frame: int | None = None,
     host: str = "127.0.0.1",
     timeout_s: float = 60.0,
 ) -> dict:
@@ -105,6 +106,17 @@ def render_structure(
                     "() => { const s = window.__atomcanvas.getState();"
                     " return !!s.structureData && !s.loading; }"
                 )
+
+                # Scrub to the requested trajectory frame before styling, so the
+                # framing and every style call below see the frame being drawn.
+                if frame is not None:
+                    n_frames = page.evaluate("() => window.__atomcanvas.frameCount()")
+                    if frame >= n_frames:
+                        raise RuntimeError(
+                            f"--frame {frame} is out of range: the file has {n_frames} "
+                            f"frame{'s' if n_frames != 1 else ''} (0-{n_frames - 1})."
+                        )
+                    page.evaluate("(i) => window.__atomcanvas.setFrame(i)", frame)
 
                 # Apply optional scene preset, then style overrides.
                 if scene_doc is not None:

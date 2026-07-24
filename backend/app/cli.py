@@ -438,14 +438,15 @@ def serve(host: str, port: int, do_build: bool, use_reload: bool) -> None:
 @click.option("--ball-scale", type=click.FloatRange(0.01, 5.0), default=None, help="Atom sphere scale: radius = covalent radius x this (ball-stick default 0.5, vdW 1.0).")
 @click.option("--autoframe/--no-autoframe", "autoframe", default=True, show_default=True, help="Re-centre/re-fit the camera on load. --no-autoframe keeps the camera where it is (pair with --camera-pos or a pre-rotated input).")
 @click.option("--pbc-bonds/--no-pbc-bonds", "show_pbc_bonds", default=True, show_default=True, help="Draw the half-bond stubs that cross the periodic cell boundary.")
-@click.option("--select", "selection", default=None, help='Render only atoms matching a selection DSL expression, e.g. "slab:z@1 OR slab:z@2" for the top two layers.')
+@click.option("--frame", type=click.IntRange(min=0), default=None, help="Trajectory frame to render (0-based). Default: the first frame.")
+@click.option("--select", "selection", default=None, help='Render only atoms matching a selection DSL expression, e.g. "slab:z,4,4" for the top layer of four.')
 @click.option("--bond-scale", default=1.2, show_default=True, help="Bond scale for the bonded/connected/extend selectors used by --select.")
 @click.option("--overrides", type=click.Path(exists=True, dir_okay=False), default=None, help='Per-atom color/radius overrides as JSON: {"colors":{idx:hex},"radii":{idx:scale}}.')
 @click.option("--scene", type=click.Path(exists=True, dir_okay=False), default=None, help="Apply a saved scene.json (bakes edits+style+camera).")
 @click.option("--no-gizmo", "no_gizmo", is_flag=True, help="Hide the XYZ axes gizmo (cleaner figure output).")
 @click.option("--no-aromatic-rings", "no_aromatic_rings", is_flag=True, help="Hide the aromatic-ring torus; aromatic bonds render as alternating single/double (Kekulé).")
 @click.option("--build/--no-build", "do_build", default=True, show_default=True, help="Auto-build the frontend bundle when it is missing.")
-def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, view, camera_pos, camera_target, up, camera_zoom, ball_scale, autoframe, show_pbc_bonds, selection, bond_scale, overrides, scene, no_gizmo, no_aromatic_rings, do_build):
+def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, view, camera_pos, camera_target, up, camera_zoom, ball_scale, autoframe, show_pbc_bonds, frame, selection, bond_scale, overrides, scene, no_gizmo, no_aromatic_rings, do_build):
     from .services import render_browser
     from .services.render_support import build_camera_view_spec, parse_size, parse_vec3, parse_view
 
@@ -505,6 +506,7 @@ def render(structure, out_png, out_glb, size, scale, display, render_style, tran
                 camera=camera, overrides=overrides_data, scene=scene, hide_gizmo=no_gizmo,
                 hide_aromatic_rings=no_aromatic_rings, ball_scale=ball_scale,
                 show_pbc_bonds=show_pbc_bonds, autoframe=autoframe, camera_view=camera_view,
+                frame=frame,
             )
     except click.ClickException:
         raise

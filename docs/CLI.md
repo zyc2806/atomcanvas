@@ -227,6 +227,7 @@ At least one of `-o` / `--glb` is required.
 | `--ball-scale FLOAT` | *(mode preset)* | Atom sphere scale: radius = covalent radius × this. Presets: `0.5` ball-stick, `1.0` vdW. |
 | `--no-autoframe` | *(framing on)* | Do not re-centre/re-fit the camera on load. |
 | `--no-pbc-bonds` | *(stubs on)* | Hide the half-bond stubs that cross the periodic cell boundary. |
+| `--frame N` | `0` | Trajectory frame to render (0-based). |
 | `--select EXPR` | *(all atoms)* | Render only the atoms matching a [selection expression](#selection-dsl). |
 | `--bond-scale FLOAT` | `1.2` | Bond scale for the `bonded:`/`connected:`/`extend:` selectors used by `--select`. |
 | `--overrides FILE` | none | Per-atom color/radius overrides, JSON `{"colors":{idx:hex},"radii":{idx:scale}}`. |
@@ -316,9 +317,21 @@ done
 python -m app.cli render slab.cif -o fig.png \
   --camera-pos 0,-40,10 --camera-target 0,0,6 --no-autoframe
 
+# A specific frame of an MD trajectory
+python -m app.cli render md.extxyz -o frame50.png --frame 50 --axis c
+
 # Reproducible figure from a saved scene
 python -m app.cli render mol.cif -o fig.png --scene saved.scene.json
 ```
+
+#### Bonds across the periodic boundary
+
+A bond that crosses a cell face is drawn as two short stubs — one running from
+each atom towards where its partner actually is — rather than as a single line
+straight across the cell. This holds for static structures (the backend
+computes the stubs) and for every trajectory frame (the viewer re-derives them
+per frame, since a wrapped trajectory puts a bonded pair on opposite sides of
+the box). `--no-pbc-bonds` hides the stubs entirely.
 
 ## Selection DSL
 

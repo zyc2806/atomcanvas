@@ -18,6 +18,7 @@ import { displayPositions } from './displayPositions';
 import type { BondHalf, WrappedGhostBond } from './bondHalves';
 import type { LodSettings } from './lod';
 import { applyAromaticDisplay, aromaticBondIds, shouldHighlightBondHalf } from '../../utils/aromaticBonds';
+import { splitBondsByMinimumImage } from '../../utils/minImageBonds';
 
 // Stable fallback uColor for the instanced toon material. The instanced path
 // always sets per-half colors via setColorAt, so USE_INSTANCING_COLOR is defined
@@ -79,7 +80,22 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
                 activeStructure?.visualization?.kekule_orders,
                 showAromaticRings,
             );
-            ghostBonds = showPbcBonds ? (customGhostBonds || []) : [];
+            // Trajectory frames are drawn from RAW per-frame positions, and the
+            // backend's wrapped-basis ghost stubs do not apply to them. For a
+            // WRAPPED trajectory (XDATCAR, most LAMMPS dumps) a bonded pair that
+            // straddles the boundary sits on opposite sides of the box, so
+            // drawing it directly would run a line across the whole cell.
+            // Re-derive the split per frame instead.
+            const split = splitBondsByMinimumImage({
+                positions: customPositions ?? [],
+                bonds,
+                cell: activeStructure?.structure?.cell,
+                pbc: activeStructure?.structure?.pbc,
+            });
+            bonds = split.bonds;
+            ghostBonds = showPbcBonds
+                ? [...(customGhostBonds || []), ...split.ghostBonds]
+                : [];
             symbols = activeStructure?.structure?.symbols || [];
         } else {
             if (!activeStructure || !activeStructure.visualization) return [];

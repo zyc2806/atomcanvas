@@ -333,6 +333,20 @@ def test_render_no_pbc_bonds_flag(runner, captured_render, tmp_path):
     assert captured_render["show_pbc_bonds"] is True
 
 
+def test_render_frame_forwards_to_driver(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--frame", "3", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured_render["frame"] == 3
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured_render["frame"] is None
+
+    r3 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--frame", "-1", "--no-build"])
+    assert r3.exit_code != 0
+
+
 def test_render_select_subsets_the_structure_the_viewer_sees(runner, monkeypatch, tmp_path):
     # --select must reach the browser as an already-filtered file, so bonds,
     # framing and the glb all describe the subset. Water minus its oxygen

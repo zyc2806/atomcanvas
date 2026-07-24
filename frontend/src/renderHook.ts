@@ -50,6 +50,13 @@ export function installRenderHook(): void {
     setBackground: (partial: Partial<BackgroundConfig>) => store.getState().setBackground(partial),
     setGlobalBrightness: (value: number) => store.getState().setGlobalBrightness(value),
     setCameraType: (type: 'perspective' | 'orthographic') => store.getState().setCameraType(type),
+    // Scrub a loaded trajectory. Returns the frame actually shown (the store
+    // clamps to the available range) so the CLI can report an out-of-range ask.
+    setFrame: (index: number): number => {
+      store.getState().setCurrentFrame(index);
+      return store.getState().currentFrame;
+    },
+    frameCount: (): number => store.getState().structureData?.trajectory?.length ?? 1,
     // Point the camera along a direction (or park it at an absolute position)
     // and commit it atomically. Returns false when the spec cannot be resolved,
     // which the render CLI turns into a clean error. Going through

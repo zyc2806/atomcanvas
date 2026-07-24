@@ -227,6 +227,8 @@ At least one of `-o` / `--glb` is required.
 | `--ball-scale FLOAT` | *(mode preset)* | Atom sphere scale: radius = covalent radius × this. Presets: `0.5` ball-stick, `1.0` vdW. |
 | `--no-autoframe` | *(framing on)* | Do not re-centre/re-fit the camera on load. |
 | `--no-pbc-bonds` | *(stubs on)* | Hide the half-bond stubs that cross the periodic cell boundary. |
+| `--select EXPR` | *(all atoms)* | Render only the atoms matching a [selection expression](#selection-dsl). |
+| `--bond-scale FLOAT` | `1.2` | Bond scale for the `bonded:`/`connected:`/`extend:` selectors used by `--select`. |
 | `--overrides FILE` | none | Per-atom color/radius overrides, JSON `{"colors":{idx:hex},"radii":{idx:scale}}`. |
 | `--scene FILE` | none | Apply a saved `scene.json` (bakes edits + style + camera). |
 | `--no-gizmo` | off | Hide the XYZ axes gizmo for a clean figure. |
@@ -254,6 +256,38 @@ serve). `--view top` and `--view z` therefore agree. Override it with `--up`.
 
 Because a view pins the camera explicitly, auto-framing cannot override it —
 `--no-autoframe` is not needed alongside `--view`.
+
+> **Periodic structures: prefer `a`/`b`/`c` over the named views.** The named
+> views and `x`/`y`/`z` are *cartesian*, so on a non-orthogonal cell (a hexagonal
+> slab has γ = 60°) they do not look along a lattice vector. You get an oblique
+> projection in which atom columns and cross-boundary stubs overlap confusingly.
+> `--view c` looks down the real c axis, so periodic images line up. Reach for
+> the named views for molecules and orthogonal cells.
+
+#### Rendering only part of a structure
+
+Looking down `c` at a slab, the top layer hides everything under it, so a
+top-down figure says nothing about subsurface composition. `--select` renders a
+subset instead — the atoms are filtered *before* the viewer sees them, so bonds,
+framing and the exported `.glb` all describe the subset, while the cell and
+`pbc` flags are preserved so the cell box and lattice-frame views still work.
+
+```bash
+# Top layer only of a 4-layer slab, seen down the c axis
+python -m app.cli render alloy.cif -o top.png --axis c --select "slab:z,4,4"
+
+# Top two layers
+python -m app.cli render alloy.cif -o top2.png --axis c --select "slab:z,4,3 OR slab:z,4,4"
+
+# Everything above a cartesian height (equivalent to a --slab-range z0:z1 cut)
+python -m app.cli render alloy.cif -o top.png --axis c --select "pos:z>12.0"
+
+# The adsorbate and its first coordination shell
+python -m app.cli render cfg.cif -o site.png --view side --select "extend:@36;1"
+```
+
+The number of atoms kept is reported on stderr; a selection matching nothing is
+an error rather than a blank figure.
 
 Examples:
 
@@ -288,9 +322,9 @@ python -m app.cli render mol.cif -o fig.png --scene saved.scene.json
 
 ## Selection DSL
 
-The same expression language powers `select`, `convert --select`, and the
-in-app **Expression (advanced)** field. Selectors return a set of atom indices;
-combine them with boolean logic.
+The same expression language powers `select`, `convert --select`,
+`render --select`, and the in-app **Expression (advanced)** field. Selectors
+return a set of atom indices; combine them with boolean logic.
 
 ### Selectors
 
@@ -298,13 +332,13 @@ combine them with boolean logic.
 | --- | --- | --- |
 | `elem:` | `elem:C` | Atoms of an element symbol. |
 | `label:` | `label:C1` or `label:0,1,2` | Atoms by label or index. |
-| `pos:` | `pos:z>5.0` | Cartesian-coordinate filter on an axis. |
-| `frac:` | `frac:z>0.5` | Fractional-coordinate filter on an axis. |
-| `slab:` | `slab:z@2` | A layer index from slab analysis. |
-| `sphere:` | `sphere:@0;3.5` | Atoms within a radius (Å) of a target atom. |
+| `pos:` | `pos:z>5.0` | Cartesian-coordinate filter on an axis (`x`/`y`/`z`). |
+| `frac:` | `frac:c>0.5` | Fractional-coordinate filter on a **lattice** axis (`a`/`b`/`c`). |
+| `slab:` | `slab:z,4,4` | `axis,n_layers,layer` — k-means layer analysis. Layer is 1-based from the **bottom**, so `z,4,4` is the top layer of four. |
+| `sphere:` | `sphere:@0,3.5` | Atoms within a radius (Å) of a target atom. |
 | `bonded:` | `bonded:@0` | Atoms directly bonded to a target. |
 | `connected:` | `connected:@0` | The entire fragment connected to a target. |
-| `pct:` | `pct:z;0;50` | A percentile band along an axis (here the bottom 50%). |
+| `pct:` | `pct:z,0,50` | A percentile band along an axis (here the bottom 50%). |
 | `extend:` | `extend:@0;2` | Grow a selection N bond hops outward. |
 | `ids:` | `ids:0,1,5` | Explicit atom indices. |
 | `fixed` | `fixed` | Atoms frozen in place (a `FixAtoms` constraint). |

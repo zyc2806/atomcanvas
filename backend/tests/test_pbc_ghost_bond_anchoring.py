@@ -18,6 +18,7 @@ too, so the ghost stubs anchor to wrapped_positions. The canonical
 import numpy as np
 from ase import Atoms
 from ase.build import bulk
+from ase.geometry import get_distances
 
 from app.services.structure_utils import atoms_to_response
 from app.services.geometry_cache import BONDS_CACHE
@@ -74,3 +75,56 @@ def test_translated_rocksalt_ghost_stubs_attach_to_drawn_atoms():
         f"ghost stubs detached from their atoms (max gap {max(gaps):.3f} A); "
         "cross-cell-spanning bond artifact for non-pre-wrapped CIFs"
     )
+
+
+def _worst_drawn_bond_excess(atoms: Atoms) -> tuple[float, tuple]:
+    """The largest amount by which a REGULAR bond is drawn longer than the true
+    minimum-image distance between the same two atoms.
+
+    A cross-cell-spanning bond shows up here as a large positive excess: the
+    renderer would draw a line all the way across the cell where the real
+    (periodic) contact is short. Correctly classified cross-boundary pairs never
+    appear as regular bonds at all — they become ghost stubs — so a healthy
+    structure scores 0.
+    """
+    BONDS_CACHE.clear()
+    response = atoms_to_response(atoms)
+    wrapped = np.asarray(response.structure.wrapped_positions, dtype=float)
+    cell = np.asarray(response.structure.cell, dtype=float)
+    worst, culprit = 0.0, ()
+    for u, v, _order in response.visualization.bonds:
+        drawn = float(np.linalg.norm(wrapped[v] - wrapped[u]))
+        _vecs, dists = get_distances([wrapped[u]], [wrapped[v]], cell=cell, pbc=atoms.pbc)
+        excess = drawn - float(dists[0, 0])
+        if excess > worst:
+            worst, culprit = excess, (u, v, drawn)
+    return worst, culprit
+
+
+def test_no_regular_bond_spans_the_cell_orthogonal():
+    """Fluorite CeO2: every drawn bond must be a real (minimum-image) contact."""
+    a = 5.41
+    ce = [(0, 0, 0), (0, 0.5, 0.5), (0.5, 0, 0.5), (0.5, 0.5, 0)]
+    o = [(x, y, z) for x in (0.25, 0.75) for y in (0.25, 0.75) for z in (0.25, 0.75)]
+    ceo2 = Atoms("Ce4O8", scaled_positions=ce + o, cell=[a, a, a], pbc=True)
+    worst, culprit = _worst_drawn_bond_excess(ceo2)
+    assert worst < 1e-6, f"bond drawn across the cell instead of as a ghost stub: {culprit}"
+
+
+def test_no_regular_bond_spans_the_cell_non_orthogonal():
+    """A hexagonal fcc(111) slab (gamma = 60 deg) — the skewed cell is where a
+    naive wrapped-basis bond would most easily be drawn across the cell."""
+    from ase.build import fcc111
+
+    slab = fcc111("Pt", size=(3, 3, 4), vacuum=8.0)
+    worst, culprit = _worst_drawn_bond_excess(slab)
+    assert worst < 1e-6, f"bond drawn across the cell instead of as a ghost stub: {culprit}"
+
+
+def test_no_regular_bond_spans_the_cell_when_atoms_start_outside():
+    """Same invariant for a structure whose atoms are not pre-wrapped."""
+    a = 5.64
+    rock = bulk("NaCl", "rocksalt", a=a) * (2, 2, 2)
+    rock.translate([0.45 * a, -0.30 * a, 0.17 * a])
+    worst, culprit = _worst_drawn_bond_excess(rock)
+    assert worst < 1e-6, f"bond drawn across the cell instead of as a ghost stub: {culprit}"

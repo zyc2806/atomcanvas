@@ -333,6 +333,112 @@ def test_render_no_pbc_bonds_flag(runner, captured_render, tmp_path):
     assert captured_render["show_pbc_bonds"] is True
 
 
+def test_render_select_subsets_the_structure_the_viewer_sees(runner, monkeypatch, tmp_path):
+    # --select must reach the browser as an already-filtered file, so bonds,
+    # framing and the glb all describe the subset. Water minus its oxygen
+    # leaves the two hydrogens.
+    from ase.io import read
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    seen = {}
+
+    def fake_render(**kwargs):
+        atoms = read(kwargs["structure_path"])
+        seen["symbols"] = atoms.get_chemical_symbols()
+        seen["path"] = kwargs["structure_path"]
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": len(atoms)}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--select", "elem:H", "--no-build"])
+    assert r.exit_code == 0, r.output
+    assert seen["symbols"] == ["H", "H"]
+    assert seen["path"] != str(WATER)  # staged copy, original untouched
+    assert "kept 2 of 3" in r.output
+
+
+def test_render_select_keeps_the_cell_so_lattice_views_still_work(runner, monkeypatch, tmp_path):
+    # The staged subset must round-trip cell + pbc, or --view c and the cell box
+    # would break for a sliced slab.
+    from ase.build import fcc111
+    from ase.io import read, write
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    slab_path = tmp_path / "slab.cif"
+    slab = fcc111("Pt", size=(2, 2, 4), vacuum=6.0)
+    write(str(slab_path), slab)
+
+    seen = {}
+
+    def fake_render(**kwargs):
+        atoms = read(kwargs["structure_path"])
+        seen["cell"] = atoms.get_cell().array.flatten().tolist()
+        seen["pbc"] = list(atoms.pbc)
+        seen["n"] = len(atoms)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": len(atoms)}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+
+    out = str(tmp_path / "x.png")
+    top_half = slab.positions[:, 2].mean()
+    r = runner.invoke(
+        cli, ["render", str(slab_path), "-o", out, "--select", f"pos:z>{top_half}", "--no-build"]
+    )
+    assert r.exit_code == 0, r.output
+    assert seen["n"] < len(slab)
+    assert seen["pbc"] == [True, True, True]
+    assert seen["cell"] == pytest.approx(slab.get_cell().array.flatten().tolist())
+
+
+def test_render_select_matching_nothing_is_a_clean_error(runner, monkeypatch, tmp_path):
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", lambda **k: pytest.fail("driver must not run"))
+
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--select", "elem:Xe", "--no-build"])
+    assert r.exit_code != 0
+    assert "0 atoms" in r.output
+    assert "Traceback" not in r.output
+
+
+def test_render_rejects_a_malformed_selection_cleanly(runner, monkeypatch, tmp_path):
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", lambda **k: pytest.fail("driver must not run"))
+
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--select", "elem:", "--no-build"])
+    assert r.exit_code != 0
+    assert "Traceback" not in r.output
+
+
+def test_render_without_select_passes_the_original_path(runner, monkeypatch, tmp_path):
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    seen = {}
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(
+        rb, "render_structure",
+        lambda **k: seen.update(path=k["structure_path"]) or {"png": k.get("out_png"), "glb": None, "n_atoms": 3},
+    )
+
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r.exit_code == 0, r.output
+    assert seen["path"] == str(WATER)
+
+
 @pytest.mark.skipif(
     os.environ.get("ATOMCANVAS_RENDER_E2E") != "1",
     reason="browser render is opt-in; set ATOMCANVAS_RENDER_E2E=1 (needs playwright+chromium+built bundle)",

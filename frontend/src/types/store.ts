@@ -102,6 +102,14 @@ export interface ViewControls {
     // lines (order 1.5). OFF: hide the torus and redraw aromatic bonds as
     // alternating single/double (Kekulé) using Visualization.kekule_orders.
     showAromaticRings: boolean;
+    // ON (default): draw the half-bond stubs that run from an atom to the cell
+    // face where a bond crosses the periodic boundary. OFF: a dense periodic
+    // structure shows only intra-cell bonds.
+    showPbcBonds?: boolean;
+    // ON (default): re-centre and re-fit the camera to the structure once it
+    // finishes loading. OFF: the camera keeps its world position, so a rotated
+    // input (or a camera pinned via the render CLI) survives the load.
+    autoFrame?: boolean;
 }
 
 export interface VisualizationParams {

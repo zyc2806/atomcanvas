@@ -393,21 +393,63 @@ def serve(host: str, port: int, do_build: bool, use_reload: bool) -> None:
 @click.option("--background", default=None, help="Solid background color, e.g. '#ffffff'.")
 @click.option("--brightness", type=click.FloatRange(0.0, 2.0), default=None, help="Global brightness multiplier (0.0–2.0; 1.0 = default, 2.0 = max).")
 @click.option("--camera", type=click.Choice(["perspective", "orthographic"]), default=None, help="Camera projection (default: the viewer's perspective).")
+@click.option(
+    "--view", "--axis", "view", default=None, metavar="SPEC",
+    help=(
+        "Fixed viewing direction: a named view (top/bottom/front/back/left/right/side), "
+        "a cartesian axis (x/y/z), a lattice axis (a/b/c) — negate any of them with a "
+        "leading '-' — or three numbers as a lattice direction, e.g. '1 1 1'. "
+        "The structure is framed along that direction, so N structures render at the same angle."
+    ),
+)
+@click.option("--camera-pos", default=None, metavar="X,Y,Z", help="Absolute camera position (wins over --view; no framing applied).")
+@click.option("--camera-target", default=None, metavar="X,Y,Z", help="Look-at point (default: the structure centroid).")
+@click.option("--up", default=None, metavar="X,Y,Z", help="Camera up vector (default: +z, or +y when looking along z).")
+@click.option("--camera-zoom", type=float, default=None, help="Orthographic zoom factor (only meaningful with --camera orthographic).")
+@click.option("--ball-scale", type=click.FloatRange(0.01, 5.0), default=None, help="Atom sphere scale: radius = covalent radius x this (ball-stick default 0.5, vdW 1.0).")
+@click.option("--autoframe/--no-autoframe", "autoframe", default=True, show_default=True, help="Re-centre/re-fit the camera on load. --no-autoframe keeps the camera where it is (pair with --camera-pos or a pre-rotated input).")
+@click.option("--pbc-bonds/--no-pbc-bonds", "show_pbc_bonds", default=True, show_default=True, help="Draw the half-bond stubs that cross the periodic cell boundary.")
 @click.option("--overrides", type=click.Path(exists=True, dir_okay=False), default=None, help='Per-atom color/radius overrides as JSON: {"colors":{idx:hex},"radii":{idx:scale}}.')
 @click.option("--scene", type=click.Path(exists=True, dir_okay=False), default=None, help="Apply a saved scene.json (bakes edits+style+camera).")
 @click.option("--no-gizmo", "no_gizmo", is_flag=True, help="Hide the XYZ axes gizmo (cleaner figure output).")
 @click.option("--no-aromatic-rings", "no_aromatic_rings", is_flag=True, help="Hide the aromatic-ring torus; aromatic bonds render as alternating single/double (Kekulé).")
-@click.option("--no-build", "do_build", flag_value=False, default=True, help="Do not auto-build the frontend bundle.")
-def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, overrides, scene, no_gizmo, no_aromatic_rings, do_build):
+@click.option("--build/--no-build", "do_build", default=True, show_default=True, help="Auto-build the frontend bundle when it is missing.")
+def render(structure, out_png, out_glb, size, scale, display, render_style, transparent, background, brightness, camera, view, camera_pos, camera_target, up, camera_zoom, ball_scale, autoframe, show_pbc_bonds, overrides, scene, no_gizmo, no_aromatic_rings, do_build):
     from .services import render_browser
-    from .services.render_support import parse_size
+    from .services.render_support import build_camera_view_spec, parse_size, parse_vec3, parse_view
 
     if not out_png and not out_glb:
         raise click.ClickException("Nothing to render: pass -o/--output FILE.png and/or --glb FILE.glb.")
     try:
         parsed_size = parse_size(size)
+        parsed_view = parse_view(view) if view else None
+        parsed_pos = parse_vec3(camera_pos, "--camera-pos") if camera_pos else None
+        parsed_target = parse_vec3(camera_target, "--camera-target") if camera_target else None
+        parsed_up = parse_vec3(up, "--up") if up else None
     except ValueError as exc:
         raise click.ClickException(str(exc))
+
+    # Everything else only refines a placement; without one there is nothing to
+    # refine, and the camera would silently keep the auto-framed default.
+    if not parsed_view and not parsed_pos and (parsed_target or parsed_up or camera_zoom is not None):
+        raise click.ClickException(
+            "--camera-target/--up/--camera-zoom need a camera placement: add --view or --camera-pos."
+        )
+
+    camera_view = build_camera_view_spec(
+        view=parsed_view, camera_pos=parsed_pos, camera_target=parsed_target,
+        up=parsed_up, camera_zoom=camera_zoom,
+    )
+
+    # With framing off and nothing else aiming the camera, it stays at the
+    # viewer's world default and most structures land outside the frustum — a
+    # blank PNG. A --scene carries its own camera, so it counts as a placement.
+    if not autoframe and not camera_view and not scene:
+        click.echo(
+            "warning: --no-autoframe without --view/--camera-pos/--scene leaves the camera "
+            "at the world default; the structure will likely be out of frame.",
+            err=True,
+        )
 
     overrides_data = None
     if overrides:
@@ -425,7 +467,8 @@ def render(structure, out_png, out_glb, size, scale, display, render_style, tran
             size=parsed_size, scale=scale, display=display, render_style=render_style,
             transparent=transparent, background=background, brightness=brightness,
             camera=camera, overrides=overrides_data, scene=scene, hide_gizmo=no_gizmo,
-            hide_aromatic_rings=no_aromatic_rings,
+            hide_aromatic_rings=no_aromatic_rings, ball_scale=ball_scale,
+            show_pbc_bonds=show_pbc_bonds, autoframe=autoframe, camera_view=camera_view,
         )
     except render_browser.RenderDependencyError as exc:
         raise click.ClickException(str(exc))

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { StylePanel } from './StylePanel';
 import { useStructureStore } from '../../store/useStructureStore';
+import { BALL_STICK_ATOM_SCALE } from '../../store/slices/createUISlice';
 
 const doc = () =>
   ({
@@ -179,7 +180,7 @@ describe('StylePanel display mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ball & stick' }));
     const s = useStructureStore.getState();
     expect(s.visParams.displayMode).toBe('ball-stick');
-    expect(s.visParams.atomScale).toBeCloseTo(0.7);
+    expect(s.visParams.atomScale).toBeCloseTo(BALL_STICK_ATOM_SCALE);
     expect(s.visParams.bondRadius).toBeCloseTo(0.08);
     expect(s.viewControls.showBonds).toBe(true);
   });

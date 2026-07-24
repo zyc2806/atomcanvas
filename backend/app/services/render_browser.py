@@ -66,6 +66,10 @@ def render_structure(
     scene: str | None = None,
     hide_gizmo: bool = False,
     hide_aromatic_rings: bool = False,
+    ball_scale: float | None = None,
+    show_pbc_bonds: bool = True,
+    autoframe: bool = True,
+    camera_view: dict | None = None,
     host: str = "127.0.0.1",
     timeout_s: float = 60.0,
 ) -> dict:
@@ -87,6 +91,14 @@ def render_structure(
                 page.goto(url)
                 page.wait_for_function("() => !!window.__atomcanvas")
 
+                # Auto-framing runs as the structure finishes loading, so it has
+                # to be switched off *before* the file goes in — afterwards is
+                # too late, the camera has already been re-centred.
+                if not autoframe:
+                    page.evaluate(
+                        "() => window.__atomcanvas.setViewControls({ autoFrame: false })"
+                    )
+
                 # Load via the real file input (faithful app path).
                 page.set_input_files("[data-testid=file-input]", structure_path)
                 page.wait_for_function(
@@ -100,9 +112,15 @@ def render_structure(
                 for method, arg in build_style_calls(
                     display=display, render_style=render_style,
                     transparent=transparent, background=background,
-                    brightness=brightness, camera=camera,
+                    brightness=brightness, camera=camera, ball_scale=ball_scale,
+                    show_pbc_bonds=show_pbc_bonds, camera_view=camera_view,
                 ):
-                    page.evaluate(f"(a) => window.__atomcanvas.{method}(a)", arg)
+                    ok = page.evaluate(f"(a) => window.__atomcanvas.{method}(a)", arg)
+                    if method == "setCameraView" and ok is False:
+                        raise RuntimeError(
+                            "Could not place the camera from the requested view "
+                            "(degenerate direction, or a camera sitting on its own target)."
+                        )
 
                 # Hide the XYZ axes gizmo for a clean figure (the hook forwards to
                 # the same setViewControls the UI toggle uses).

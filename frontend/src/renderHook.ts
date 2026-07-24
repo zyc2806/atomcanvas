@@ -5,8 +5,14 @@ import { applySceneDocument } from './services/sceneDocument';
 import { captureCanvasPng, buildSceneForDoc } from './services/batchExport';
 import { exportGlb } from './services/glbExporter';
 import { getCaptureHandle } from './services/captureHandle';
+import { resolveCameraView } from './services/cameraViews';
+import { displayPositions } from './components/r3f/displayPositions';
+import type { CameraViewSpec } from './services/cameraViews';
 import type { ViewControls, VisualizationParams, BackgroundConfig } from './types/store';
 import type { SceneDoc } from './services/sceneDocument';
+
+// Matches the FOV of the perspective camera in ViewerCanvas (CameraManager).
+const VIEWER_FOV_DEG = 50;
 
 // A monotonically increasing frame counter. The Playwright render driver waits
 // for this to advance after loading a structure, which guarantees the WebGL
@@ -44,6 +50,28 @@ export function installRenderHook(): void {
     setBackground: (partial: Partial<BackgroundConfig>) => store.getState().setBackground(partial),
     setGlobalBrightness: (value: number) => store.getState().setGlobalBrightness(value),
     setCameraType: (type: 'perspective' | 'orthographic') => store.getState().setCameraType(type),
+    // Point the camera along a direction (or park it at an absolute position)
+    // and commit it atomically. Returns false when the spec cannot be resolved,
+    // which the render CLI turns into a clean error. Going through
+    // applyCameraSnapshot also marks the camera as user-owned, so a later
+    // structure load cannot auto-frame it away.
+    setCameraView: (spec: CameraViewSpec): boolean => {
+      const s = store.getState();
+      const structure = s.structureData?.structure;
+      const view = resolveCameraView({
+        spec,
+        positions: structure ? displayPositions(structure) : [],
+        cell: structure?.cell,
+        fovDeg: VIEWER_FOV_DEG,
+      });
+      if (!view) return false;
+      s.applyCameraSnapshot({
+        type: s.cameraType,
+        target: view.target,
+        state: { position: view.position, up: view.up, zoom: view.zoom },
+      });
+      return true;
+    },
     setColorOverrides: (m: Record<number, string> | null) => store.getState().setColorOverrides(m),
     setRadiusOverrides: (m: Record<number, number> | null) => store.getState().setRadiusOverrides(m),
     applyScene: (doc: SceneDoc) => applySceneDocument(doc),

@@ -193,6 +193,146 @@ def test_render_overrides_forwards_parsed_json(runner, monkeypatch, tmp_path):
     assert "Traceback" not in r3.output
 
 
+@pytest.fixture
+def captured_render(monkeypatch):
+    """Stubs the browser driver and the bundle build; yields the kwargs dict."""
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    captured = {}
+
+    def fake_render(**kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"png": kwargs.get("out_png"), "glb": None, "n_atoms": 3}
+
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda *a, **k: None)
+    monkeypatch.setattr(rb, "render_structure", fake_render)
+    return captured
+
+
+def test_render_builds_the_bundle_by_default(runner, monkeypatch, tmp_path):
+    # Regression: `flag_value=False, default=True` reads back as False in click
+    # 8.3, which silently turned auto-build off — `render` then failed with
+    # "Frontend bundle not found" instead of building it. Only --no-build may
+    # skip the build.
+    import app.cli as cli_mod
+    import app.services.render_browser as rb
+
+    seen = []
+    monkeypatch.setattr(cli_mod, "_ensure_frontend_bundle", lambda _d, do_build: seen.append(do_build))
+    monkeypatch.setattr(rb, "render_structure", lambda **k: {"png": k.get("out_png"), "glb": None, "n_atoms": 3})
+
+    out = str(tmp_path / "x.png")
+    assert runner.invoke(cli, ["render", str(WATER), "-o", out]).exit_code == 0
+    assert runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"]).exit_code == 0
+    assert seen == [True, False]
+
+
+def test_render_view_forwards_camera_view(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--view", "side", "--no-build"])
+    assert r.exit_code == 0, r.output
+    assert captured_render["camera_view"] == {"direction": [0.0, -1.0, 0.0], "frame": "cartesian"}
+
+
+def test_render_axis_is_an_alias_for_view(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--axis", "c", "--no-build"])
+    assert r.exit_code == 0, r.output
+    assert captured_render["camera_view"] == {"direction": [0.0, 0.0, 1.0], "frame": "lattice"}
+
+
+def test_render_rejects_unknown_view_cleanly(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--view", "sideways", "--no-build"])
+    assert r.exit_code != 0
+    assert "Traceback" not in r.output
+    assert "sideways" in r.output
+
+
+def test_render_camera_pos_target_up_zoom_forward(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, [
+        "render", str(WATER), "-o", out, "--no-build",
+        "--camera-pos", "0,0,25", "--camera-target", "1,2,3", "--up", "0,1,0", "--camera-zoom", "2",
+    ])
+    assert r.exit_code == 0, r.output
+    assert captured_render["camera_view"] == {
+        "position": [0.0, 0.0, 25.0], "target": [1.0, 2.0, 3.0],
+        "up": [0.0, 1.0, 0.0], "zoom": 2.0,
+    }
+
+
+def test_render_camera_refinements_need_a_placement(runner, captured_render, tmp_path):
+    # --camera-target/--up/--camera-zoom on their own would silently do nothing,
+    # since the camera would keep its auto-framed default.
+    out = str(tmp_path / "x.png")
+    for opt, value in [("--camera-target", "0,0,0"), ("--up", "0,0,1"), ("--camera-zoom", "2")]:
+        r = runner.invoke(cli, ["render", str(WATER), "-o", out, opt, value, "--no-build"])
+        assert r.exit_code != 0, f"{opt} alone should be rejected: {r.output}"
+        assert "Traceback" not in r.output
+        assert "--view" in r.output
+
+
+def test_render_no_camera_options_means_no_camera_view(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r.exit_code == 0, r.output
+    assert captured_render["camera_view"] is None
+
+
+def test_render_ball_scale_forwards_to_driver(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--ball-scale", "0.4", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured_render["ball_scale"] == 0.4
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured_render["ball_scale"] is None
+
+    r3 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--ball-scale", "0", "--no-build"])
+    assert r3.exit_code != 0
+
+
+def test_render_autoframe_flags(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-autoframe", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured_render["autoframe"] is False
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured_render["autoframe"] is True
+
+
+def test_render_warns_when_no_autoframe_leaves_the_camera_unplaced(runner, captured_render, tmp_path):
+    # Framing off + nothing aiming the camera = blank PNG; say so rather than
+    # writing black pixels. Any placement (here --view) silences the warning.
+    out = str(tmp_path / "x.png")
+    bare = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-autoframe", "--no-build"])
+    assert bare.exit_code == 0, bare.output
+    assert "warning" in bare.output.lower()
+
+    placed = runner.invoke(
+        cli, ["render", str(WATER), "-o", out, "--no-autoframe", "--view", "side", "--no-build"]
+    )
+    assert placed.exit_code == 0, placed.output
+    assert "warning" not in placed.output.lower()
+
+
+def test_render_no_pbc_bonds_flag(runner, captured_render, tmp_path):
+    out = str(tmp_path / "x.png")
+    r1 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-pbc-bonds", "--no-build"])
+    assert r1.exit_code == 0, r1.output
+    assert captured_render["show_pbc_bonds"] is False
+
+    r2 = runner.invoke(cli, ["render", str(WATER), "-o", out, "--no-build"])
+    assert r2.exit_code == 0, r2.output
+    assert captured_render["show_pbc_bonds"] is True
+
+
 @pytest.mark.skipif(
     os.environ.get("ATOMCANVAS_RENDER_E2E") != "1",
     reason="browser render is opt-in; set ATOMCANVAS_RENDER_E2E=1 (needs playwright+chromium+built bundle)",

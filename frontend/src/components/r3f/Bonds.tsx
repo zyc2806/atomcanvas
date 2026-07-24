@@ -50,6 +50,9 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const { bondRadius, atomScale, displayMode, renderStyle, cartoonParams } = visParams;
     const { showShadows, showBonds, showAromaticRings } = viewControls;
+    // Cross-boundary half-bond stubs. On by default; turning them off leaves a
+    // dense periodic structure showing only its intra-cell bonds.
+    const showPbcBonds = viewControls.showPbcBonds !== false;
     const { getAtomColor, getAtomOpacity, getAtomBaseOpacity } = useAtomColors();
 
     const activeStructure = structure || storeStructureData;
@@ -76,7 +79,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
                 activeStructure?.visualization?.kekule_orders,
                 showAromaticRings,
             );
-            ghostBonds = customGhostBonds || [];
+            ghostBonds = showPbcBonds ? (customGhostBonds || []) : [];
             symbols = activeStructure?.structure?.symbols || [];
         } else {
             if (!activeStructure || !activeStructure.visualization) return [];
@@ -92,7 +95,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
                 activeStructure.visualization.kekule_orders,
                 showAromaticRings,
             );
-            ghostBonds = activeStructure.visualization.wrapped_ghost_bonds || [];
+            ghostBonds = showPbcBonds ? (activeStructure.visualization.wrapped_ghost_bonds || []) : [];
             symbols = activeStructure.structure.symbols;
         }
 
@@ -113,7 +116,7 @@ const Bonds: React.FC<BondsProps> = ({ structure, customBonds, customGhostBonds,
             getAtomOpacity,
             getAtomBaseOpacity,
         });
-    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, showAromaticRings, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle, radiusOverrides]);
+    }, [activeStructure, customBonds, customGhostBonds, customPositions, isCustomMode, showAromaticRings, showPbcBonds, getAtomBaseOpacity, getAtomColor, getAtomOpacity, bondOpacityOverrides, atomScale, bondRadius, displayMode, renderStyle, radiusOverrides]);
 
     // Precompute the Set of aromatic logicalBondIds so the highlight effect can
     // gate atom-selection-driven highlights without touching aromatic bonds.

@@ -320,8 +320,8 @@ const RendererClearPolicy: React.FC = () => {
 const CameraController: React.FC<{ center: [number, number, number], shouldReset?: boolean, fitRadius?: number }> = ({ center, shouldReset, fitRadius }) => {
     const { camera, gl, events, controls: sceneControls } = useThree();
     const controlsRef = useRef<ControlsLike | null>(null);
-    const { 
-        userHasInteracted, 
+    const {
+        userHasInteracted,
         loading,
         cameraType,
         cameraState,
@@ -330,6 +330,10 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
         setViewTarget,
         setCameraState,
     } = useStructureStore();
+    // Opt-out for the render CLI's --no-autoframe: with auto-framing off the
+    // camera keeps its world position across a load, so a pre-rotated input (or
+    // a camera pinned by --camera-pos) is what you actually get.
+    const autoFrame = useStructureStore((state) => state.viewControls.autoFrame) !== false;
     
     const centerRef = useRef(center);
     const fitRadiusRef = useRef(fitRadius);
@@ -362,6 +366,11 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
         const justFinishedLoading = prevLoading.current && !loading;
         const shouldResetInitial = shouldReset && !userHasInteracted;
 
+        if (!autoFrame) {
+            prevLoading.current = loading;
+            return;
+        }
+
         if ((justFinishedLoading && !userHasInteracted) || shouldResetInitial) {
             const c = centerRef.current;
             // Frame the structure adaptively: distance to fit its bounding sphere
@@ -380,7 +389,7 @@ const CameraController: React.FC<{ center: [number, number, number], shouldReset
         }
 
         prevLoading.current = loading;
-    }, [loading, shouldReset, userHasInteracted, setViewTarget, setCameraState, camera]);
+    }, [autoFrame, loading, shouldReset, userHasInteracted, setViewTarget, setCameraState, camera]);
 
     useEffect(() => {
         const controls = controlsRef.current ?? (sceneControls as unknown as ControlsLike | null);

@@ -13,6 +13,14 @@ import { aromaticBondIds, toBondId } from '../../utils/aromaticBonds';
 // module-level counter; safe because ESM imports are hoisted
 let notificationCounter = 0;
 
+// Atom spheres are sized from COVALENT radii (data/radii.json is the Cordero
+// table), so this scale is a fraction of a covalent radius, not of a vdW one.
+// Heavy elements have large covalent radii (Ce = 2.04 Å), and at the old 0.7 a
+// dense oxide rendered as touching balls with the bonds swallowed. 0.5 keeps
+// organics recognisable while leaving daylight between metal centres; the
+// render CLI's --ball-scale overrides it per figure.
+export const BALL_STICK_ATOM_SCALE = 0.5;
+
 // Interface imported from types/store
 const generateExpressionFromSelection = (selectedAtoms: number[], symbols: string[]): string => {
     if (selectedAtoms.length === 0) return '';
@@ -121,6 +129,8 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         tooltipTheme: 'dark',
         axesLabels: 'xyz',
         showAromaticRings: true,
+        showPbcBonds: true,
+        autoFrame: true,
     },
     visParams: {
         displayMode: 'ball-stick',
@@ -128,7 +138,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         bondRadius: 0.08,
         bondInferenceMode: 'auto',
         includeBondDiagnostics: false,
-        atomScale: 0.7,
+        atomScale: BALL_STICK_ATOM_SCALE,
         showHBonds: false,
         hBondMaxDist: 3.5,
         hBondMinAngle: 120,
@@ -202,7 +212,7 @@ export const createUISlice: StateCreator<StructureState, [], [], UISlice> = (set
         if (mode === 'ball-stick') {
             newParams = {
                 ...newParams,
-                atomScale: 0.7,
+                atomScale: BALL_STICK_ATOM_SCALE,
                 bondRadius: 0.08
             };
             newViewControls = { showBonds: true };
